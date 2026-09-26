@@ -6,10 +6,9 @@ export const APP_NAME = 'CKPLCStudio'
 export const LATEST_PRIVACY_POLICY_VERSION = '20260531'
 
 /**
- * AGPL-3.0 义务：公开源码获取地址。
- * TODO: 将仓库发布到 GitHub/Gitee 后，把此地址替换为真实仓库链接。
+ * AGPL-3.0 义务：公开源码获取地址（本 fork 的公开仓库）。
  */
-export const SOURCE_CODE_URL = 'https://example.com/plc-studio-source'
+export const SOURCE_CODE_URL = 'https://github.com/ttkkchch/PLC-Studio'
 
 /** AGPL-3.0 义务：显著声明修改者。原始版权链：Cherry Studio → 智控堂（PLC Studio）→ CK。 */
 export const MODIFIER_NAME = 'CK'
