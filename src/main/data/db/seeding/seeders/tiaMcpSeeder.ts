@@ -48,7 +48,11 @@ export const TIA_MCP_DEFAULT_ARGS = [
   '--tia-portal-location',
   'C:\\Program Files\\Siemens\\Automation\\Portal V21',
   '--tia-major-version',
-  '21'
+  '21',
+  // 防博途崩溃：无此参数时 Connect 会以 WithoutUserInterface 悄悄起一个无头
+  // Portal 实例，与用户手动打开的 UI 实例并存导致工程锁/许可证冲突、UI 卡死。
+  // 显式带 UI 启动后实例可见、冲突可被用户识别与处置。
+  '--with-ui'
 ]
 
 /**
@@ -161,7 +165,7 @@ export class TiaMcpSeeder implements ISeeder {
           const detected = detectTiaPortalLocation()
           if (detected && detected !== TIA_MCP_DEFAULT_ARGS[1]) {
             tx.update(mcpServerTable)
-              .set({ args: ['--tia-portal-location', detected, '--tia-major-version', '21'] })
+              .set({ args: ['--tia-portal-location', detected, '--tia-major-version', '21', '--with-ui'] })
               .where(eq(mcpServerTable.id, existing.id))
               .run()
             logger.info('Repaired TIA Portal location', { detected })
@@ -173,7 +177,7 @@ export class TiaMcpSeeder implements ISeeder {
       // Fresh insert: use the detected installation location when available.
       const detected = detectTiaPortalLocation()
       const args = detected
-        ? ['--tia-portal-location', detected, '--tia-major-version', '21']
+        ? ['--tia-portal-location', detected, '--tia-major-version', '21', '--with-ui']
         : [...TIA_MCP_DEFAULT_ARGS]
 
       const now = Date.now()
