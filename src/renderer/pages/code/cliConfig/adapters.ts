@@ -164,7 +164,7 @@ function requireDraftValue(value: string | undefined, label: string): string {
 function providerNameFromKey(providerKey: string | undefined, label: string): string {
   const key = requireDraftValue(providerKey, label)
   if (!key.startsWith(CHERRY_PROVIDER_PREFIX)) {
-    throw new Error(`Cannot update CLI config draft: ${label} is not managed by PLC Studio`)
+    throw new Error(`Cannot update CLI config draft: ${label} is not managed by CKPLCStudio`)
   }
   return key.slice(CHERRY_PROVIDER_PREFIX.length)
 }

@@ -378,7 +378,7 @@ export class McpRuntimeService extends BaseService {
     const initPromise = (async () => {
       try {
         // Create new client instance for each connection
-        const client = new Client({ name: 'PLC Studio', version: app.getVersion() }, { capabilities: {} })
+        const client = new Client({ name: 'CKPLCStudio', version: app.getVersion() }, { capabilities: {} })
 
         let args = [...(server.args || [])]
 
@@ -412,7 +412,7 @@ export class McpRuntimeService extends BaseService {
               requestInit: {
                 headers: {
                   ...defaultAppHeaders(),
-                  APP: 'PLC Studio'
+                  APP: 'CKPLCStudio'
                 }
               },
               authProvider

@@ -87,7 +87,7 @@ export function openUserDataRelocationWindow(options: OpenRelocationWindowOption
     minimizable: true,
     show: false,
     autoHideMenuBar: true,
-    title: 'PLC Studio',
+    title: 'CKPLCStudio',
     webPreferences: {
       preload: join(__dirname, '../preload/simplest.js'),
       partition: 'user-data-relocation-window',

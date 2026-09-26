@@ -16,7 +16,7 @@ export class AppService {
     } else if (isLinux) {
       try {
         const autostartDir = application.getPath('sys.appdata.autostart')
-        const desktopFile = path.join(autostartDir, isDev ? 'plc-studio-dev.desktop' : 'plc-studio.desktop')
+        const desktopFile = path.join(autostartDir, isDev ? 'CKPLCStudio-dev.desktop' : 'CKPLCStudio.desktop')
 
         if (isLaunchOnBoot) {
           // Ensure autostart directory exists
@@ -36,10 +36,10 @@ export class AppService {
           // Create desktop file content
           const desktopContent = `[Desktop Entry]
   Type=Application
-  Name=PLC Studio
-  Comment=A powerful AI assistant for producer.
+  Name=CKPLCStudio
+  Comment=AI-powered TIA Portal PLC programming studio
   Exec=${executablePath}
-  Icon=cherrystudio
+  Icon=CKPLCStudio
   Terminal=false
   StartupNotify=false
   Categories=Development;Utility;

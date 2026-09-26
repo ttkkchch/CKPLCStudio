@@ -154,7 +154,7 @@ export class AppMenuService extends BaseService {
             type: 'custom',
             label: appMenu.website,
             click: () => {
-              void shell.openExternal('https://cherry-ai.com')
+              void shell.openExternal(SOURCE_CODE_URL)
             }
           },
           {

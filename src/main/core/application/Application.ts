@@ -285,7 +285,7 @@ export class Application {
     const result = await dialog.showMessageBox({
       type: 'error',
       title: 'Unable to Start',
-      message: `PLC Studio could not start because ${error.serviceName} failed to initialize.`,
+      message: `CKPLCStudio could not start because ${error.serviceName} failed to initialize.`,
       detail:
         'Try restarting the application. If the problem persists, check the application logs for detailed error information.',
       buttons: ['Exit', 'Restart'],

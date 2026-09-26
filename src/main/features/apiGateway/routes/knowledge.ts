@@ -77,7 +77,7 @@ export const knowledgeRoutes = new Elysia({ prefix: '/knowledge-bases' })
             results: [],
             total: 0,
             searched_bases: [],
-            warnings: ['No knowledge bases configured. Please add knowledge bases in PLC Studio.']
+            warnings: ['No knowledge bases configured. Please add knowledge bases in CKPLCStudio.']
           }
         }
       }

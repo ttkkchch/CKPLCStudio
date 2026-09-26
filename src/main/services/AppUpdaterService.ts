@@ -113,6 +113,13 @@ export class AppUpdaterService extends BaseService {
     if (!app.isPackaged || this.isPortable()) {
       return
     }
+    // No real update feed configured (placeholder `.invalid` host from the
+    // broken-update-chain build) — skip scheduling checks entirely instead of
+    // failing DNS lookups every 4 hours.
+    if ((autoUpdater.getFeedURL() ?? '').includes('.invalid')) {
+      logger.info('update feed is a placeholder, automatic update checks disabled')
+      return
+    }
     this.scheduleNextUpdateCheck(INITIAL_CHECK_DELAY_MS)
   }
 
@@ -221,7 +228,9 @@ export class AppUpdaterService extends BaseService {
       // 如果 autoDownload 为 false，则需要再调用下面的函数触发下
       // do not use await, because it will block the return of this function
       logger.info('downloadUpdate manual by check for updates', this.cancellationToken)
-      void autoUpdater.downloadUpdate(this.cancellationToken)
+      autoUpdater.downloadUpdate(this.cancellationToken).catch((error) => {
+        logger.warn('manual downloadUpdate failed', error as Error)
+      })
     }
 
     return {

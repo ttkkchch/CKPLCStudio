@@ -519,7 +519,7 @@ export const DefaultPreferences: PreferenceSchemas = {
     'agent.session.display_mode': 'agent',
     'agent.session.position': 'left',
     'app.developer_mode.enabled': false,
-    'app.dist.auto_update.enabled': true,
+    'app.dist.auto_update.enabled': false,
     'app.dist.test_plan.channel': PreferenceTypes.UpgradeChannel.LATEST,
     'app.dist.test_plan.enabled': false,
     'app.language': null,

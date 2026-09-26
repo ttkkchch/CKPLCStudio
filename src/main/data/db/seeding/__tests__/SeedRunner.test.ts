@@ -173,13 +173,16 @@ describe('SeedRunner', () => {
     expect(journalRows).toHaveLength(0)
   })
 
-  it('runs production seeders in fresh-user order without duplicating the default assistant', async () => {
+  it('runs production seeders in fresh-user order without duplicating assistants', async () => {
     const runner = new SeedRunner(dbh.db)
 
     runner.runAll(seeders)
     runner.runAll(seeders)
 
     const assistants = await dbh.db.select().from(assistantTable)
-    expect(assistants).toHaveLength(1)
+    // The default assistant plus the bundled TIA Engineer assistant, each seeded exactly once.
+    // (Names are the English defaults: the test harness runs with an en locale.)
+    expect(assistants).toHaveLength(2)
+    expect(assistants.map((a) => a.name).sort()).toEqual(['PLC Assistant', 'TIA Engineer'])
   })
 })

@@ -77,7 +77,7 @@ const AboutSettings: FC = () => {
     openSmartMiniApp({
       appId: 'plcstudio-releases',
       name: t('settings.about.releases.title'),
-      url: `file://${appPath}/resources/plc-studio/releases.html?theme=${theme === ThemeMode.dark ? 'dark' : 'light'}`,
+      url: `file://${appPath}/resources/ckplcstudio/releases.html?theme=${theme === ThemeMode.dark ? 'dark' : 'light'}`,
       logo: AppLogo
     })
   }

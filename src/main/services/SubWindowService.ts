@@ -168,7 +168,7 @@ export class SubWindowService extends BaseService {
     // Deliberately omit `backgroundColor` on macOS — an undefined value can still overwrite
     // the vibrancy-enabled default through the options merge path.
     const options: Partial<WindowOptions> = {
-      title: title || 'PLC Studio Tab',
+      title: title || 'CKPLCStudio Tab',
       darkTheme: dark,
       ...(!isMac && { backgroundColor: dark ? '#181818' : '#FFFFFF' }),
       ...(isLinux && { icon: linuxIcon }),

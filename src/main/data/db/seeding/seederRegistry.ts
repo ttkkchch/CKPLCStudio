@@ -5,6 +5,7 @@ import { DefaultAssistantSeeder } from './seeders/defaultAssistantSeeder'
 import { MiniAppSeeder } from './seeders/miniAppSeeder'
 import { PreferenceSeeder } from './seeders/preferenceSeeder'
 import { PresetProviderSeeder } from './seeders/presetProviderSeeder'
+import { TiaAssistantSeeder } from './seeders/tiaAssistantSeeder'
 import { TiaMcpSeeder } from './seeders/tiaMcpSeeder'
 import { TranslateLanguageSeeder } from './seeders/translateLanguageSeeder'
 
@@ -25,5 +26,7 @@ export const seeders: ISeeder[] = [
   new TranslateLanguageSeeder(),
   new PresetProviderSeeder(),
   new MiniAppSeeder(),
-  new TiaMcpSeeder()
+  new TiaMcpSeeder(),
+  // Must run after TiaMcpSeeder: it binds the assistant to the seeded MCP server row.
+  new TiaAssistantSeeder()
 ]

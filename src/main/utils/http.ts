@@ -1,7 +1,7 @@
 export const defaultAppHeaders = () => {
   return {
-    'HTTP-Referer': 'https://cherry-ai.com',
-    'X-Title': 'PLC Studio'
+    'HTTP-Referer': 'https://example.com/ckplcstudio',
+    'X-Title': 'CKPLCStudio'
   }
 }
 

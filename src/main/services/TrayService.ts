@@ -50,7 +50,7 @@ export class TrayService extends BaseService implements Activatable {
       this.tray.setContextMenu(this.contextMenu)
     }
 
-    this.tray.setToolTip('PLC Studio')
+    this.tray.setToolTip('CKPLCStudio')
 
     this.tray.on('right-click', () => {
       if (this.contextMenu) {

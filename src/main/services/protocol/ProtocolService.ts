@@ -13,11 +13,22 @@ import { handleMcpProtocolUrl } from './handlers/mcpInstall'
 import { handleNavigateProtocolUrl } from './handlers/navigate'
 import { handleProvidersProtocolUrl } from './handlers/providersImport'
 
+/** Primary deep-link scheme, declared in electron-builder.yml (installer registers it too). */
+export const APP_PROTOCOL = 'ckplcstudio'
+/** Legacy scheme kept for old shared links from the upstream Cherry Studio era. */
 export const CHERRY_STUDIO_PROTOCOL = 'cherrystudio'
+const PROTOCOL_SCHEMES = [APP_PROTOCOL, CHERRY_STUDIO_PROTOCOL]
 
-const DESKTOP_FILE_NAME = 'cherrystudio-url-handler.desktop'
+const DESKTOP_FILE_NAME = 'ckplcstudio-url-handler.desktop'
 const execAsync = promisify(exec)
 const logger = loggerService.withContext('ProtocolService')
+
+/** Find the first argv element that is a deep link of any supported scheme. */
+function findProtocolUrl(args: string[]): string | undefined {
+  return args.find((arg) =>
+    PROTOCOL_SCHEMES.some((scheme) => arg.toLowerCase().startsWith(`${scheme}://`))
+  )
+}
 
 @Injectable('ProtocolService')
 @ServicePhase(Phase.Background)
@@ -31,7 +42,7 @@ export class ProtocolService extends BaseService {
     // which is before app.whenReady() (an OS-level event requiring the event loop).
     // This guarantees our open-url listener is attached before macOS cold-start URLs fire.
 
-    // 1) Register OS-level protocol scheme
+    // 1) Register OS-level protocol schemes (new + legacy)
     this.registerProtocolScheme()
 
     // 2) macOS open-url listener (cold + hot start)
@@ -50,7 +61,7 @@ export class ProtocolService extends BaseService {
     //      the app is running); surface the main window. MainWindowService is
     //      WhenReady, fully alive by the time any 'second-instance' can fire.
     const secondInstanceHandler = (_event: Electron.Event, argv: string[]) => {
-      const url = argv.find((arg) => arg.startsWith(`${CHERRY_STUDIO_PROTOCOL}://`))
+      const url = findProtocolUrl(argv)
       if (url) {
         this.handleProtocolUrl(url)
       } else {
@@ -73,14 +84,16 @@ export class ProtocolService extends BaseService {
     // In dev, Electron needs the app entry as an absolute path; launchers often
     // pass "." as argv[1], which becomes invalid when the OS invokes the
     // protocol handler from a different cwd.
-    if (process.defaultApp) {
-      if (process.argv.length >= 2) {
-        const entry = process.argv[1]
-        const absoluteEntry = path.isAbsolute(entry) ? entry : path.resolve(process.cwd(), entry)
-        app.setAsDefaultProtocolClient(CHERRY_STUDIO_PROTOCOL, process.execPath, [absoluteEntry])
+    for (const scheme of PROTOCOL_SCHEMES) {
+      if (process.defaultApp) {
+        if (process.argv.length >= 2) {
+          const entry = process.argv[1]
+          const absoluteEntry = path.isAbsolute(entry) ? entry : path.resolve(process.cwd(), entry)
+          app.setAsDefaultProtocolClient(scheme, process.execPath, [absoluteEntry])
+        }
+      } else {
+        app.setAsDefaultProtocolClient(scheme)
       }
-    } else {
-      app.setAsDefaultProtocolClient(CHERRY_STUDIO_PROTOCOL)
     }
   }
 
@@ -136,13 +149,13 @@ export class ProtocolService extends BaseService {
   }
 
   private handleArgvForUrl(args: string[]) {
-    const url = args.find((arg) => arg.startsWith(CHERRY_STUDIO_PROTOCOL + '://'))
+    const url = findProtocolUrl(args)
     if (url) this.handleProtocolUrl(url)
   }
 
   /**
    * Sets up deep linking for the AppImage build on Linux by creating a .desktop file.
-   * This allows the OS to open cherrystudio:// URLs with this App.
+   * This allows the OS to open ckplcstudio:// (or legacy cherrystudio://) URLs with this App.
    */
   private async setupAppImageDeepLink(): Promise<void> {
     // Only run on Linux and when packaged as an AppImage
@@ -159,12 +172,13 @@ export class ProtocolService extends BaseService {
         return
       }
 
+      const mimeTypeHandlers = PROTOCOL_SCHEMES.map((scheme) => `x-scheme-handler/${scheme};`).join('')
       const desktopFileContent = `[Desktop Entry]
-Name=PLC Studio
+Name=CKPLCStudio
 Exec=${escapePathForExec(appPath)} %U
 Terminal=false
 Type=Application
-MimeType=x-scheme-handler/${CHERRY_STUDIO_PROTOCOL};
+MimeType=${mimeTypeHandlers}
 NoDisplay=true
 `
 

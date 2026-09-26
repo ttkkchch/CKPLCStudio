@@ -1,5 +1,9 @@
-appId: com.plcstudio.desktop
-productName: PLC Studio
+appId: com.ckplcstudio.desktop
+# 本机无 Visual Studio C++ 工作负载，跳过 electron-builder 原生依赖重编：
+# better-sqlite3 已由 pnpm rebuild:electron 预编译为 Electron ABI；
+# @paymoapp/electron-shutdown-handler 未编译，运行时 PowerService 自动降级 powerMonitor。
+npmRebuild: false
+productName: CKPLCStudio
 electronLanguages:
   - zh-CN
   - zh-TW
@@ -14,11 +18,12 @@ directories:
   buildResources: build
 
 protocols:
-  - name: PLC Studio
+  - name: CKPLCStudio
     schemes:
-      - plcstudio
+      - CKPLCStudio
 files:
   - "**/*"
+  - "!v2-refactor-temp"
   - "!**/{.vscode,.yarn,.yarn-lock,.github,.cursorrules,.prettierrc}"
   - "!electron.vite.config.{js,ts,mjs,cjs}}"
   - "!.*"
@@ -86,8 +91,8 @@ extraResources:
   - from: "packages/provider-registry/data"
     to: "provider-registry"
 win:
-  executableName: PLC Studio
-  artifactName: PLC-Studio-${version}-${arch}-setup.${ext}
+  executableName: CKPLCStudio
+  artifactName: CKPLCStudio-${version}-${arch}-setup.${ext}
   extraResources:
     - from: "node_modules/@aiany/sqlite-vec-windows-${arch}/vec0.dll"
       to: "app.asar.unpacked/node_modules/@aiany/sqlite-vec-windows-${arch}/vec0.dll"
@@ -98,7 +103,7 @@ win:
     sign: scripts/win-sign.js
   verifyUpdateCodeSignature: false
 nsis:
-  artifactName: PLC-Studio-${version}-${arch}-setup.${ext}
+  artifactName: CKPLCStudio-${version}-${arch}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -108,12 +113,12 @@ nsis:
   buildUniversalInstaller: false
   differentialPackage: false
 portable:
-  artifactName: PLC-Studio-${version}-${arch}-portable.${ext}
+  artifactName: CKPLCStudio-${version}-${arch}-portable.${ext}
   buildUniversalInstaller: false
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
-  artifactName: PLC-Studio-${version}-${arch}.${ext}
+  artifactName: CKPLCStudio-${version}-${arch}.${ext}
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
@@ -125,8 +130,8 @@ mac:
 dmg:
   writeUpdateInfo: false
 linux:
-  artifactName: PLC-Studio-${version}-${arch}.${ext}
-  executableName: PLCStudio
+  artifactName: CKPLCStudio-${version}-${arch}.${ext}
+  executableName: CKPLCStudio
   target:
     - target: AppImage
     - target: deb
@@ -135,17 +140,18 @@ linux:
   category: Utility
   desktop:
     entry:
-      Name: PLC Studio
-      StartupWMClass: PLCStudio
+      Name: CKPLCStudio
+      StartupWMClass: CKPLCStudio
   mimeTypes:
-    - x-scheme-handler/plcstudio
+    - x-scheme-handler/CKPLCStudio
 rpm:
   # Workaround for electron build issue on rpm package:
   # https://github.com/electron/forge/issues/3594
   fpm: ["--rpm-rpmbuild-define=_build_id_links none"]
 publish:
   provider: generic
-  url: https://releases.cherry-ai.com
+  # 断链占位：.invalid TLD 永不解析。发布自有更新源时替换为真实地址。
+  url: https://update.ckplcstudio.invalid/
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 beforePack: scripts/before-pack.js
@@ -154,16 +160,16 @@ afterSign: scripts/notarize.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    PLC Studio 2.0.0-rc.1 - Backup & Restore, Painting Improvements & v2 Stabilization
+    CKPLCStudio 2.0.0-rc.1 - Backup & Restore, Painting Improvements & v2 Stabilization
 
     ✨ New Features
     - [Paintings] Added a localized prompt-template gallery to the empty painting canvas, with editable concrete prompt tokens and an accessible prompt preview and copy action. The gallery disappears once image generation begins so completed results retain the standard image-only viewer.
 
     🐛 Bug Fixes
     - [Backup & Restore] action required: Create a fresh version 7 backup after upgrading from v1; local, WebDAV, Nutstore, and S3 backup and restore are available again, and partial backup is no longer offered.
-    - [Data] action required: The v2 database now lives at `Data/plcstudio.sqlite`, Claude config is migrated to `Data/Agents/.claude`, and existing pre-alpha database files at the former root location are not imported automatically.
+    - [Data] action required: The v2 database now lives at `Data/CKPLCStudio.sqlite`, Claude config is migrated to `Data/Agents/.claude`, and existing pre-alpha database files at the former root location are not imported automatically.
     - [Agent] action required: New users who skip provider setup must configure a model before using the built-in PLC Assistant. Choosing a model during onboarding configures it automatically.
-    - [Data Directory] action required: Removed special protection for the OS Music, Pictures, and Videos directories when choosing a data-directory relocation target; avoid selecting these shared media roots unless you intentionally want PLC Studio to use them as its data directory.
+    - [Data Directory] action required: Removed special protection for the OS Music, Pictures, and Videos directories when choosing a data-directory relocation target; avoid selecting these shared media roots unless you intentionally want CKPLCStudio to use them as its data directory.
     - [Migration] Fixed v2 migration failure when an existing Claude config directory is present.
     - [Migration] Fixed Windows Agent data migration failures when copied workspaces contain directory links.
     - [Migration] Fixed v1-to-v2 migration so custom mini-apps are preserved, and aligned custom and Ant Ling launchpad icon sizing.
@@ -191,16 +197,16 @@ releaseInfo:
     - [UI] Refined the new conversation icon with thinner, consistently scaled strokes.
 
     <!--LANG:zh-CN-->
-    PLC Studio 2.0.0-rc.1 - 备份恢复、绘图改进与 v2 稳定化
+    CKPLCStudio 2.0.0-rc.1 - 备份恢复、绘图改进与 v2 稳定化
 
     ✨ 新功能
     - [绘图] 在空白的绘图画布上新增本地化提示词模板画廊，模板带可编辑的具体示例 Token，并提供无障碍的提示词预览与复制；开始生成后画廊自动消失，已完成结果仍使用原有纯图查看器。
 
     🐛 问题修复
     - [备份与恢复] action required: 从 v1 升级后请重新创建 version 7 备份；本地、WebDAV、坚果云、S3 的备份与恢复已重新可用，不再提供部分备份。
-    - [数据] action required: v2 数据库现已位于 `Data/plcstudio.sqlite`，Claude 配置迁移至 `Data/Agents/.claude`，原根目录下的预发布版数据库文件不会被自动导入。
+    - [数据] action required: v2 数据库现已位于 `Data/CKPLCStudio.sqlite`，Claude 配置迁移至 `Data/Agents/.claude`，原根目录下的预发布版数据库文件不会被自动导入。
     - [智能体] action required: 跳过服务商配置的新用户需在使用内置 PLC Assistant 前先配置一个模型；在引导流程中选择模型会自动完成配置。
-    - [数据目录] action required: 选择数据目录迁移目标时不再对系统“音乐”“图片”“视频”目录做特殊保护；除非确实希望将它们作为 PLC Studio 的数据目录，请避免选择这些共享媒体根目录。
+    - [数据目录] action required: 选择数据目录迁移目标时不再对系统“音乐”“图片”“视频”目录做特殊保护；除非确实希望将它们作为 CKPLCStudio 的数据目录，请避免选择这些共享媒体根目录。
     - [迁移] 修复了已存在 Claude 配置目录时 v2 迁移失败的问题。
     - [迁移] 修复了 Windows 智能体数据迁移在复用的工作区包含目录链接时失败的问题。
     - [迁移] 修复了 v1 到 v2 迁移时自定义小程序丢失的问题，并统一了自定义与 Ant Ling 启动台图标尺寸。

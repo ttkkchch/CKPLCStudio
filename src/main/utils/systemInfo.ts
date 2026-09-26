@@ -90,7 +90,7 @@ export function getSystemInfo(): SystemInfo {
 export function generateUserAgent(): string {
   const systemInfo = getSystemInfo()
 
-  return `Mozilla/5.0 (${systemInfo.osString}; ${systemInfo.archString}) AppleWebKit/537.36 (KHTML, like Gecko) PLCStudio/${systemInfo.appVersion} Chrome/124.0.0.0 Safari/537.36`
+  return `Mozilla/5.0 (${systemInfo.osString}; ${systemInfo.archString}) AppleWebKit/537.36 (KHTML, like Gecko) CKPLCStudio/${systemInfo.appVersion} Chrome/124.0.0.0 Safari/537.36`
 }
 
 /**

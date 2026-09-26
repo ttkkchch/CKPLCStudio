@@ -521,7 +521,7 @@ export class ChannelMessageHandler {
         }
         case 'help': {
           const agent = agentService.getAgent(agentId)
-          const name = agent?.name ?? 'PLC Studio'
+          const name = agent?.name ?? 'CKPLCStudio'
           const description = agent?.description ?? ''
           const commands = await this.helpCommandsForChat(agentId, adapter.channelId, command.chatId)
           const helpText = [

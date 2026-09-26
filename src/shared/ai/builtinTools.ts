@@ -125,7 +125,7 @@ export const kbSearchInputSchema = z.object({
     .describe(
       'Self-contained keyword search. MUST NOT use pronouns ("it", "their") or context-dependent ' +
         'references; expand the topic from earlier messages when the user asks a follow-up. ' +
-        'Examples: ✓ "PLC Studio MCP cache invalidation", ✗ "its cache".'
+        'Examples: ✓ "CKPLCStudio MCP cache invalidation", ✗ "its cache".'
     ),
   baseIds: z
     .array(z.string().trim().min(1))

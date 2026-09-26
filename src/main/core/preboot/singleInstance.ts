@@ -37,7 +37,7 @@ const logger = loggerService.withContext('SingleInstance')
 export function requireSingleInstance(): void {
   if (app.requestSingleInstanceLock()) return
 
-  logger.info('Another PLC Studio instance already holds the single-instance lock; exiting')
+  logger.info('Another CKPLCStudio instance already holds the single-instance lock; exiting')
   application.quit()
   process.exit(0)
 }

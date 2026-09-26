@@ -43,5 +43,9 @@
     "tests/__mocks__/**/*",
     "tests/helpers/**/*"
   ],
-  "exclude": ["packages/aiCore/src/**/__tests__", "packages/aiCore/test_utils"]
+  "exclude": [
+    "packages/aiCore/src/**/__tests__",
+    "packages/aiCore/test_utils",
+    "scripts/check-legacy-css-vars.ts"
+  ]
 }

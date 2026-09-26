@@ -507,7 +507,7 @@ export class SkillService {
     const detailUrl = new URL(`https://clawhub.ai/api/v1/skills/${encodeURIComponent(slug)}`)
     detailUrl.searchParams.set('ownerHandle', ownerHandle)
     const detailResp = await net.fetch(detailUrl.toString(), {
-      headers: { 'User-Agent': 'PLCStudio' }
+      headers: { 'User-Agent': 'CKPLCStudio' }
     })
 
     if (!detailResp.ok) {
@@ -531,7 +531,7 @@ export class SkillService {
     downloadUrl.searchParams.set('slug', slug)
     downloadUrl.searchParams.set('ownerHandle', ownerHandle)
     const downloadResp = await net.fetch(downloadUrl.toString(), {
-      headers: { 'User-Agent': 'PLCStudio' }
+      headers: { 'User-Agent': 'CKPLCStudio' }
     })
 
     if (!downloadResp.ok) {

@@ -1,7 +1,7 @@
 /**
- * Builds ClaudeCodeSettings from PLC Studio's agent session configuration.
+ * Builds ClaudeCodeSettings from CKPLCStudio's agent session configuration.
  *
- * Maps PLC Studio's internal data model (agent sessions, providers, MCP servers,
+ * Maps CKPLCStudio's internal data model (agent sessions, providers, MCP servers,
  * tool permissions, prompt builder) to ai-sdk-provider-claude-code's ClaudeCodeSettings.
  *
  * Usage:
@@ -86,7 +86,7 @@ import type { ClaudeCodeSettings, McpToolDisplayMetadata, SteerHolder, ToolAppro
 
 const logger = loggerService.withContext('ClaudeCodeSettingsBuilder')
 const MINIMAL_CHERRY_ASSISTANT_INSTRUCTIONS =
-  'You are PLC Assistant, the built-in helper for PLC Studio. Help users understand and troubleshoot PLC Studio.'
+  'You are PLC Assistant, the built-in helper for CKPLCStudio. Help users understand and troubleshoot CKPLCStudio.'
 const require_ = createRequire(import.meta.url)
 const promptBuilder = new PromptBuilder()
 const ASK_USER_QUESTION_TOOL_NAME = 'AskUserQuestion'
@@ -226,7 +226,7 @@ function buildAssistantContext(): string {
 
   return [
     '## Current Environment',
-    `- App: PLC Studio v${appVersion}`,
+    `- App: CKPLCStudio v${appVersion}`,
     `- OS: ${platform}`,
     `- Language: ${language}, Theme: ${theme}`,
     proxy ? `- Proxy: ${redactUrlToOrigin(proxy)}` : '- Proxy: none',
@@ -257,7 +257,7 @@ export type LinkedChannelSnapshot = Pick<AgentChannelEntity, 'id'> | null
 // ── Main builder ────────────────────────────────────────────────────
 
 /**
- * Build session-level ClaudeCodeSettings from PLC Studio's agent session.
+ * Build session-level ClaudeCodeSettings from CKPLCStudio's agent session.
  */
 export async function buildClaudeCodeSessionSettings(
   session: AgentSessionEntity,
@@ -895,7 +895,7 @@ async function buildToolPermissions(
         hookEventName: 'PreToolUse',
         permissionDecision: 'deny',
         permissionDecisionReason:
-          'Headless channel or scheduled turns cannot mutate agent configuration. Ask the user to make this change in PLC Studio.'
+          'Headless channel or scheduled turns cannot mutate agent configuration. Ask the user to make this change in CKPLCStudio.'
       }
     }
   }

@@ -182,7 +182,7 @@ const PopupContainer: React.FC<PopupContainerProps> = ({
     title,
     tags: obsidianTags || '',
     createdAt: new Date().toISOString().split('T')[0],
-    source: 'PLC Studio',
+    source: 'CKPLCStudio',
     processingMethod: processingMethod,
     folder: ''
   })

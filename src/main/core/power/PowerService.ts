@@ -278,7 +278,7 @@ export class PowerService extends BaseService {
       // observes the event and does NOT hold the OS — this is what makes the Windows
       // path a real barrier, symmetric with preventDefault() on macOS/Linux. Must be
       // called after the listener is attached (the listener is what installs the hook).
-      shutdownHandler.blockShutdown('PLC Studio is finishing background work')
+      shutdownHandler.blockShutdown('CKPLCStudio is finishing background work')
 
       this.registerDisposable(() => {
         if (!shutdownHookWindow.isDestroyed()) shutdownHookWindow.destroy()

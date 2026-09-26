@@ -1,11 +1,11 @@
 {
-  "name": "plc-studio",
+  "name": "ckplcstudio",
   "version": "2.0.0-rc.1",
   "private": true,
-  "description": "A powerful AI assistant for producer.",
-  "desktopName": "PLCStudio.desktop",
+  "description": "AI-powered TIA Portal PLC programming studio",
+  "desktopName": "CKPLCStudio.desktop",
   "main": "./out/main/main.js",
-  "author": "智控堂",
+  "author": "CK",
   "homepage": "https://example.com/plc-studio-source",
   "engines": {
     "node": ">=24.11.1 <24.16.0"
@@ -78,7 +78,7 @@
     "bench:aicore": "vitest bench --run --project aiCore",
     "bench:shared": "vitest bench --run --project shared",
     "docs:check-links": "tsx scripts/check-doc-links.ts",
-    "prepare": "git config blame.ignoreRevsFile .git-blame-ignore-revs && prek install",
+    "prepare": "git config blame.ignoreRevsFile .git-blame-ignore-revs && prek install || echo [skip] prek unavailable, git hooks not installed",
     "claude": "dotenv -e .env -- claude",
     "db:migrations:generate": "drizzle-kit generate --config ./migrations/sqlite-drizzle.config.ts",
     "db:migrations:check": "drizzle-kit check --config ./migrations/sqlite-drizzle.config.ts",

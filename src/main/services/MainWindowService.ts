@@ -192,9 +192,11 @@ export class MainWindowService extends BaseService {
       initData,
       options: {
         darkTheme: nativeTheme.shouldUseDarkColors,
+        // Windows 开发模式下 electron.exe 自带默认原子图标，显式传 icon
+        // 让标题栏/任务栏显示应用图标；打包后 exe 已内嵌 ico，此参数同样生效
+        icon: isLinux ? linuxIcon : iconPath,
         ...(isLinux && {
-          frame: preferenceService.get('app.use_system_title_bar'),
-          icon: linuxIcon
+          frame: preferenceService.get('app.use_system_title_bar')
         }),
         ...(windowsBackgroundMaterial ? { backgroundMaterial: windowsBackgroundMaterial } : {}),
         ...(mainWindowBackgroundColor ? { backgroundColor: mainWindowBackgroundColor } : {}),

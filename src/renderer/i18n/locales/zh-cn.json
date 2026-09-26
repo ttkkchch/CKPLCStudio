@@ -33,7 +33,7 @@
     },
     "builtin": {
       "cherry_assistant": {
-        "description": "PLC Studio 内置使用顾问。诊断问题、引导操作、收录 FAQ、提交 Bug/需求、搜索和创建 Skills"
+        "description": "CKPLCStudio 内置使用顾问。诊断问题、引导操作、收录 FAQ、提交 Bug/需求、搜索和创建 Skills"
       }
     },
     "channels": {
@@ -1052,7 +1052,7 @@
     "authHeader": {
       "title": "授权标头"
     },
-    "description": "通过 OpenAI 和 Anthropic 兼容的 HTTP API 暴露 PLC Studio 的 AI 功能",
+    "description": "通过 OpenAI 和 Anthropic 兼容的 HTTP API 暴露 CKPLCStudio 的 AI 功能",
     "documentation": {
       "title": "API 文档"
     },
@@ -2081,7 +2081,7 @@
     },
     "api_gateway": {
       "description": "任意 CLI，畅用全部模型",
-      "requires_running": "启用后请保持 PLC Studio 运行，外部 CLI 才能连接到它托管的网关。",
+      "requires_running": "启用后请保持 CKPLCStudio 运行，外部 CLI 才能连接到它托管的网关。",
       "title": "统一网关"
     },
     "apply_failed": "写入 CLI 配置到系统文件失败",
@@ -4603,12 +4603,12 @@
       "select_other_provider": "选择其他服务商",
       "setup_hint": "您可以随时在设置中更换服务商",
       "subtitle": "连接服务商，开启您的全能 AI 工作站",
-      "title": "欢迎使用 PLC Studio"
+      "title": "欢迎使用 CKPLCStudio"
     }
   },
   "openclaw": {
     "checking_installation": "正在检查 OpenClaw 安装状态...",
-    "description": "使用 PLC Studio 服务商为 OpenClaw 提供支持，OpenClaw 是您的个人 AI 助手，可在 WhatsApp、Telegram、Slack、Discord 等平台上使用。",
+    "description": "使用 CKPLCStudio 服务商为 OpenClaw 提供支持，OpenClaw 是您的个人 AI 助手，可在 WhatsApp、Telegram、Slack、Discord 等平台上使用。",
     "error": {
       "select_provider_model": "请先选择服务商和模型"
     },
@@ -4629,7 +4629,7 @@
     },
     "installed_at": "OpenClaw 安装路径",
     "migration": {
-      "description": "检测到 PATH 中存在外部 OpenClaw 安装，但 PLC Studio 只使用托管的 OpenClaw 二进制文件。请安装托管版本后继续。",
+      "description": "检测到 PATH 中存在外部 OpenClaw 安装，但 CKPLCStudio 只使用托管的 OpenClaw 二进制文件。请安装托管版本后继续。",
       "install_button": "重新安装 OpenClaw",
       "title": "OpenClaw 需要更新"
     },
@@ -5542,7 +5542,7 @@
           },
           "description": {
             "0": "划词助手需「<strong>辅助功能权限</strong>」才能正常工作。",
-            "1": "请点击「<strong>去设置</strong>」，并在稍后弹出的权限请求弹窗中点击 「<strong>打开系统设置</strong>」 按钮，然后在之后的应用列表中找到 「<strong>PLC Studio</strong>」，并打开权限开关。",
+            "1": "请点击「<strong>去设置</strong>」，并在稍后弹出的权限请求弹窗中点击 「<strong>打开系统设置</strong>」 按钮，然后在之后的应用列表中找到 「<strong>CKPLCStudio</strong>」，并打开权限开关。",
             "2": "完成设置后，请再次开启划词助手。"
           },
           "title": "辅助功能权限"
@@ -5554,7 +5554,7 @@
         "title": "应用筛选名单",
         "user_tips": {
           "mac": "请输入应用的Bundle ID，每行一个，不区分大小写，可以模糊匹配。例如：com.google.Chrome、com.apple.mail等",
-          "windows": "请输入应用的执行文件名，每行一个，不区分大小写，可以模糊匹配。例如：chrome.exe、weixin.exe、PLCStudio.exe等"
+          "windows": "请输入应用的执行文件名，每行一个，不区分大小写，可以模糊匹配。例如：chrome.exe、weixin.exe、CKPLCStudio.exe等"
         }
       },
       "linux": {
@@ -5566,7 +5566,7 @@
         "wayland_checklist_subtitle": "确认以下条件已满足，以尽可能优化 Wayland 下的体验：",
         "wayland_description": "当前为 Wayland 模式，受系统限制，部分桌面环境下工具栏只能显示在屏幕中央，无法跟随选中文本定位。建议切换到 X11 模式以获得完整体验。",
         "wayland_title": "Wayland 模式提示",
-        "xwayland_fail": "未启用，请使用 `--ozone-platform=x11` 参数启动 PLC Studio",
+        "xwayland_fail": "未启用，请使用 `--ozone-platform=x11` 参数启动 CKPLCStudio",
         "xwayland_label": "XWayland 模式：",
         "xwayland_pass": "已启用"
       },
@@ -5815,9 +5815,9 @@
         "path_changed_without_copy": "路径已更改成功",
         "restart_notice": "应用可能会重启多次以应用更改",
         "select": "修改目录",
-        "select_error": "所选目录可能正被另一个 PLC Studio 实例使用。请关闭其他实例后重试；若确认没有实例运行，请删除该目录中遗留的 SingletonLock 和 SingletonSocket 文件。",
+        "select_error": "所选目录可能正被另一个 CKPLCStudio 实例使用。请关闭其他实例后重试；若确认没有实例运行，请删除该目录中遗留的 SingletonLock 和 SingletonSocket 文件。",
         "select_error_in_app_path": "新路径与应用安装路径相同，请选择其他路径",
-        "select_error_protected_path": "所选路径受操作系统或 PLC Studio 保护，请选择其他文件夹",
+        "select_error_protected_path": "所选路径受操作系统或 CKPLCStudio 保护，请选择其他文件夹",
         "select_error_root_path": "新路径不能是根路径",
         "select_error_same_path": "新路径与旧路径相同，请选择其他路径",
         "select_error_write_permission": "新路径没有写入权限",
@@ -6240,7 +6240,7 @@
           "title": "连接检测"
         },
         "root_path": "文档根路径",
-        "root_path_placeholder": "例如：/PLCStudio",
+        "root_path_placeholder": "例如：/CKPLCStudio",
         "title": "思源笔记配置",
         "token": {
           "help": "在思源笔记 -> 设置 -> 关于中获取",
@@ -6433,14 +6433,14 @@
       "notInstalled": "未安装",
       "openBinariesDir": "打开二进制文件目录",
       "remove": "移除工具",
-      "removeConfirmMessage": "要从 PLC Studio 中移除 \"{{name}}\" 吗？其可移植工具定义将被删除；如果存在 Cherry 管理的 mise 副本，也会一并清理。系统和应用内置的可执行文件不会被修改。",
+      "removeConfirmMessage": "要从 CKPLCStudio 中移除 \"{{name}}\" 吗？其可移植工具定义将被删除；如果存在 Cherry 管理的 mise 副本，也会一并清理。系统和应用内置的可执行文件不会被修改。",
       "removeConfirmTitle": "移除工具",
       "removeDefinitionOnlyConfirmMessage": "Cherry 无法安全清理 \"{{name}}\"：{{details}} 仅移除定义会隐藏该卡片，但后端文件仍会保留。是否继续？",
       "removeDefinitionOnlyConfirmTitle": "仅移除定义？",
       "removeDefinitionOnlyDependents": "以下已安装工具依赖它：{{dependents}}。",
       "removeError": "工具移除失败",
       "removeErrorHint": "清理命令执行失败。复制下方日志以便排查或寻求帮助。",
-      "removeRuntimeConfirmMessage": "要从 PLC Studio 中移除 \"{{name}}\" 吗？Cherry 只会清理其管理的 mise 副本，系统和应用内置的运行时不会被修改。如果已安装的 npm 或 pip 工具依赖此运行时，移除操作会被阻止。",
+      "removeRuntimeConfirmMessage": "要从 CKPLCStudio 中移除 \"{{name}}\" 吗？Cherry 只会清理其管理的 mise 副本，系统和应用内置的运行时不会被修改。如果已安装的 npm 或 pip 工具依赖此运行时，移除操作会被阻止。",
       "runtimeDependency": "运行时依赖",
       "runtimeDependencyHint": "npm/pip 工具使用的运行时",
       "searchFailed": "搜索失败，请查看日志",
@@ -6467,7 +6467,7 @@
         "uv": "用于 MCP 服务与依赖安装的 Python 包管理工具。"
       },
       "uninstall": "卸载",
-      "uninstallConfirmMessage": "确定要卸载 \"{{name}}\" 吗？PLC Studio 管理的后端副本将被删除。",
+      "uninstallConfirmMessage": "确定要卸载 \"{{name}}\" 吗？CKPLCStudio 管理的后端副本将被删除。",
       "uninstallConfirmTitle": "卸载工具",
       "uninstallFailed": "工具卸载失败",
       "uninstallSuccess": "工具已卸载",

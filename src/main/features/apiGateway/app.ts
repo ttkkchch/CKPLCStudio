@@ -76,10 +76,10 @@ export function buildApp() {
         mapJsonSchema: { zod: z.toJSONSchema },
         documentation: {
           info: {
-            title: 'PLC Studio API',
+            title: 'CKPLCStudio API',
             version: '1.0.0',
             description:
-              'OpenAI- and Anthropic-compatible HTTP API for PLC Studio, plus Cherry-specific endpoints (models, knowledge bases)'
+              'OpenAI- and Anthropic-compatible HTTP API for CKPLCStudio, plus Cherry-specific endpoints (models, knowledge bases)'
           }
         }
       })
@@ -117,7 +117,7 @@ export function buildApp() {
     .get(
       '/',
       () => ({
-        name: 'PLC Studio API',
+        name: 'CKPLCStudio API',
         version: '1.0.0',
         endpoints: {
           health: 'GET /health',

@@ -36,7 +36,7 @@ export function initCrashTelemetry(): void {
 function startCrashReporter(): void {
   crashReporter.start({
     companyName: 'PLC',
-    productName: 'PLCStudio',
+    productName: 'CKPLCStudio',
     submitURL: '',
     uploadToServer: false
   })

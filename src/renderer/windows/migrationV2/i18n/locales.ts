@@ -53,7 +53,7 @@ export const zhCN = {
       save: '保存诊断包',
       saving: '正在保存…',
       privacy:
-        '应用日志可能包含文件路径、错误堆栈、用户内容或凭据，请勿分享到公开渠道或提供给 PLC Studio 支持团队之外的人员。',
+        '应用日志可能包含文件路径、错误堆栈、用户内容或凭据，请勿分享到公开渠道或提供给 CKPLCStudio 支持团队之外的人员。',
       saved_local: '诊断包已保存到本地且未自动上传，请发送至问题反馈邮箱以协助排查。',
       logs_not_included: '未能加入应用日志，当前诊断包仅包含系统信息。',
       open_folder: '打开文件所在位置',
@@ -65,7 +65,7 @@ export const zhCN = {
     },
     introduction: {
       title: '将数据迁移到新的架构中',
-      subtitle: 'PLC Studio V2 · 全新数据架构',
+      subtitle: 'CKPLCStudio V2 · 全新数据架构',
       features: {
         architecture: {
           title: '全新数据架构',
@@ -118,7 +118,7 @@ export const zhCN = {
       prepared_chats: '已准备 {{processed}}/{{total}} 个对话'
     },
     completed: {
-      title: '欢迎来到 PLC Studio V2',
+      title: '欢迎来到 CKPLCStudio V2',
       description: '迁移完成，你的数据已经全部就位。重启应用即可开始使用 V2。',
       steps_label: '步骤已完成',
       items_label: '迁移项',
@@ -141,7 +141,7 @@ export const zhCN = {
     },
     version_incompatible: {
       title: '版本升级提示',
-      preamble: 'PLC Studio 对数据存储进行了重大重构，为了保证旧数据的安全迁移，我们对升级顺序有严格要求。',
+      preamble: 'CKPLCStudio 对数据存储进行了重大重构，为了保证旧数据的安全迁移，我们对升级顺序有严格要求。',
       no_version_log:
         '无法确定您之前使用的版本。请先安装 {{requiredVersion}} 版本并运行一次，然后再安装此版本进行数据迁移。',
       v1_too_old:
@@ -204,7 +204,7 @@ export const enUS = {
       save: 'Save diagnostic bundle',
       saving: 'Saving…',
       privacy:
-        'Application logs may contain file paths, error stacks, user content, or credentials. Do not share them publicly or with anyone outside the PLC Studio support team.',
+        'Application logs may contain file paths, error stacks, user content, or credentials. Do not share them publicly or with anyone outside the CKPLCStudio support team.',
       saved_local:
         'The diagnostic bundle was saved locally and was not uploaded automatically. Please send it to the feedback email to help us investigate.',
       logs_not_included:
@@ -218,7 +218,7 @@ export const enUS = {
     },
     introduction: {
       title: 'Migrate Data to New Architecture',
-      subtitle: 'PLC Studio V2 · New Data Architecture',
+      subtitle: 'CKPLCStudio V2 · New Data Architecture',
       features: {
         architecture: {
           title: 'New Data Architecture',
@@ -271,7 +271,7 @@ export const enUS = {
       prepared_chats: 'Prepared {{processed}}/{{total}} conversations'
     },
     completed: {
-      title: 'Welcome to PLC Studio V2',
+      title: 'Welcome to CKPLCStudio V2',
       description: 'Migration is complete. Your data is ready. Restart the app to start using V2.',
       steps_label: 'Steps completed',
       items_label: 'Migration items',
@@ -296,7 +296,7 @@ export const enUS = {
     version_incompatible: {
       title: 'Version Upgrade Required',
       preamble:
-        'PLC Studio has undergone a major data storage refactoring. To ensure safe migration of your data, we have strict requirements on the upgrade order.',
+        'CKPLCStudio has undergone a major data storage refactoring. To ensure safe migration of your data, we have strict requirements on the upgrade order.',
       no_version_log:
         'Cannot determine your previous version. Please install version {{requiredVersion}} first and run it at least once, then install this version to complete the data migration.',
       v1_too_old:

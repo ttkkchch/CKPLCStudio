@@ -94,3 +94,6 @@ YOUR_MEMORY_FILE_PATH
 .sessions/
 .devtools
 .omo/
+
+# TiaMcpServer runtime logs
+resources/tia-mcp/**/*.log

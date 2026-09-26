@@ -33,7 +33,7 @@
     },
     "builtin": {
       "cherry_assistant": {
-        "description": "Built-in PLC Studio advisor. Diagnose issues, guide operations, collect FAQs, submit bugs/feature requests, and search/create Skills"
+        "description": "Built-in CKPLCStudio advisor. Diagnose issues, guide operations, collect FAQs, submit bugs/feature requests, and search/create Skills"
       }
     },
     "channels": {
@@ -1052,7 +1052,7 @@
     "authHeader": {
       "title": "Authorization Header"
     },
-    "description": "Expose PLC Studio's AI capabilities through OpenAI- and Anthropic-compatible HTTP APIs",
+    "description": "Expose CKPLCStudio's AI capabilities through OpenAI- and Anthropic-compatible HTTP APIs",
     "documentation": {
       "title": "API Documentation"
     },
@@ -2081,7 +2081,7 @@
     },
     "api_gateway": {
       "description": "Any CLI, every model",
-      "requires_running": "Keep PLC Studio running after enabling — the external CLI connects to the gateway it hosts.",
+      "requires_running": "Keep CKPLCStudio running after enabling — the external CLI connects to the gateway it hosts.",
       "title": "Unified Gateway"
     },
     "apply_failed": "Failed to write CLI config to the system file",
@@ -4603,12 +4603,12 @@
       "select_other_provider": "Select Other Provider",
       "setup_hint": "You can change providers anytime in Settings",
       "subtitle": "Connect a provider to unlock your All-in-One AI Workstation",
-      "title": "Welcome to PLC Studio"
+      "title": "Welcome to CKPLCStudio"
     }
   },
   "openclaw": {
     "checking_installation": "Checking OpenClaw installation...",
-    "description": "Use PLC Studio providers to power OpenClaw, your personal AI assistant that works across WhatsApp, Telegram, Slack, Discord and more.",
+    "description": "Use CKPLCStudio providers to power OpenClaw, your personal AI assistant that works across WhatsApp, Telegram, Slack, Discord and more.",
     "error": {
       "select_provider_model": "Please select a provider and model first"
     },
@@ -4629,7 +4629,7 @@
     },
     "installed_at": "OpenClaw installed at",
     "migration": {
-      "description": "An external OpenClaw installation was detected in PATH, but PLC Studio uses its managed OpenClaw binary. Install the managed version to continue.",
+      "description": "An external OpenClaw installation was detected in PATH, but CKPLCStudio uses its managed OpenClaw binary. Install the managed version to continue.",
       "install_button": "Reinstall OpenClaw",
       "title": "OpenClaw Needs Update"
     },
@@ -5542,7 +5542,7 @@
           },
           "description": {
             "0": "Selection Assistant requires <strong>Accessibility Permission</strong> to work properly.",
-            "1": "Please click \"<strong>Go to Settings</strong>\" and click the \"<strong>Open System Settings</strong>\" button in the permission request popup that appears later. Then find \"<strong>PLC Studio</strong>\" in the application list that appears later and turn on the permission switch.",
+            "1": "Please click \"<strong>Go to Settings</strong>\" and click the \"<strong>Open System Settings</strong>\" button in the permission request popup that appears later. Then find \"<strong>CKPLCStudio</strong>\" in the application list that appears later and turn on the permission switch.",
             "2": "After completing the settings, please reopen the selection assistant."
           },
           "title": "Accessibility Permission"
@@ -5554,7 +5554,7 @@
         "title": "Application Filter List",
         "user_tips": {
           "mac": "Please enter the Bundle ID of the application, one per line, case insensitive, can be fuzzy matched. For example: com.google.Chrome, com.apple.mail, etc.",
-          "windows": "Please enter the executable file name of the application, one per line, case insensitive, can be fuzzy matched. For example: chrome.exe, weixin.exe, PLCStudio.exe, etc."
+          "windows": "Please enter the executable file name of the application, one per line, case insensitive, can be fuzzy matched. For example: chrome.exe, weixin.exe, CKPLCStudio.exe, etc."
         }
       },
       "linux": {
@@ -5566,7 +5566,7 @@
         "wayland_checklist_subtitle": "Ensure the following conditions are met to optimize the Wayland experience:",
         "wayland_description": "You are in a Wayland session. Due to system limitations, the toolbar may only appear at the center of the screen instead of following the selected text on some desktop environments. It is recommended to switch to an X11 session for the full experience.",
         "wayland_title": "Wayland Session Notice",
-        "xwayland_fail": "Not enabled, please launch PLC Studio with the `--ozone-platform=x11` flag",
+        "xwayland_fail": "Not enabled, please launch CKPLCStudio with the `--ozone-platform=x11` flag",
         "xwayland_label": "XWayland mode: ",
         "xwayland_pass": "Enabled"
       },
@@ -5815,9 +5815,9 @@
         "path_changed_without_copy": "Path changed successfully",
         "restart_notice": "The app may need to restart multiple times to apply the changes",
         "select": "Modify Directory",
-        "select_error": "The selected directory may be used by another PLC Studio instance. Close other instances and try again. If none are running, remove stale SingletonLock and SingletonSocket files from that directory.",
+        "select_error": "The selected directory may be used by another CKPLCStudio instance. Close other instances and try again. If none are running, remove stale SingletonLock and SingletonSocket files from that directory.",
         "select_error_in_app_path": "New path is the same as the application installation path, please select another path",
-        "select_error_protected_path": "The selected path is protected by the operating system or PLC Studio. Please choose another folder.",
+        "select_error_protected_path": "The selected path is protected by the operating system or CKPLCStudio. Please choose another folder.",
         "select_error_root_path": "New path cannot be the root path",
         "select_error_same_path": "New path is the same as the old path, please select another path",
         "select_error_write_permission": "New path does not have write permission",
@@ -6240,7 +6240,7 @@
           "title": "Connection Check"
         },
         "root_path": "Siyuan Note Root Path",
-        "root_path_placeholder": "e.g.: /PLCStudio",
+        "root_path_placeholder": "e.g.: /CKPLCStudio",
         "title": "Siyuan Note",
         "token": {
           "help": "Get Siyuan Note Token",
@@ -6433,14 +6433,14 @@
       "notInstalled": "Not installed",
       "openBinariesDir": "Open binaries directory",
       "remove": "Remove tool",
-      "removeConfirmMessage": "Remove \"{{name}}\" from PLC Studio? Its portable definition will be deleted. Cherry will also clean up an exact mise-managed copy when present. System and bundled executables are never changed.",
+      "removeConfirmMessage": "Remove \"{{name}}\" from CKPLCStudio? Its portable definition will be deleted. Cherry will also clean up an exact mise-managed copy when present. System and bundled executables are never changed.",
       "removeConfirmTitle": "Remove Tool",
       "removeDefinitionOnlyConfirmMessage": "Cherry could not safely clean up \"{{name}}\": {{details}} Removing only its definition will hide the card but leave its backend files installed. Continue?",
       "removeDefinitionOnlyConfirmTitle": "Remove Definition Only?",
       "removeDefinitionOnlyDependents": "Installed tools depend on it: {{dependents}}.",
       "removeError": "Failed to remove tool",
       "removeErrorHint": "The cleanup command failed. Copy the log below to troubleshoot or share it for help.",
-      "removeRuntimeConfirmMessage": "Remove \"{{name}}\" from PLC Studio? Cherry will clean up only an exact mise-managed copy. System and bundled runtimes are never changed. Installed npm or pip tools may block removal if they depend on this runtime.",
+      "removeRuntimeConfirmMessage": "Remove \"{{name}}\" from CKPLCStudio? Cherry will clean up only an exact mise-managed copy. System and bundled runtimes are never changed. Installed npm or pip tools may block removal if they depend on this runtime.",
       "runtimeDependency": "Runtime",
       "runtimeDependencyHint": "Runtime for npm/pip tools",
       "searchFailed": "Search failed, check logs",
@@ -6467,7 +6467,7 @@
         "uv": "Python package manager for MCP services and dependency installation."
       },
       "uninstall": "Uninstall",
-      "uninstallConfirmMessage": "Are you sure you want to uninstall \"{{name}}\"? PLC Studio's backend copy will be deleted.",
+      "uninstallConfirmMessage": "Are you sure you want to uninstall \"{{name}}\"? CKPLCStudio's backend copy will be deleted.",
       "uninstallConfirmTitle": "Uninstall Tool",
       "uninstallFailed": "Failed to uninstall tool",
       "uninstallSuccess": "Tool uninstalled",

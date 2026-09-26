@@ -33,7 +33,7 @@
     },
     "builtin": {
       "cherry_assistant": {
-        "description": "内蔵のPLC Studioアドバイザー。問題の診断、操作ガイド、FAQの収集、バグ/機能リクエストの提出、およびスキルの検索/作成を行います。"
+        "description": "内蔵のCKPLCStudioアドバイザー。問題の診断、操作ガイド、FAQの収集、バグ/機能リクエストの提出、およびスキルの検索/作成を行います。"
       }
     },
     "channels": {
@@ -1052,7 +1052,7 @@
     "authHeader": {
       "title": "認証ヘッダー"
     },
-    "description": "OpenAI 互換の HTTP API を通じて PLC Studio の AI 機能を公開します",
+    "description": "OpenAI 互換の HTTP API を通じて CKPLCStudio の AI 機能を公開します",
     "documentation": {
       "title": "API ドキュメント"
     },
@@ -2081,7 +2081,7 @@
     },
     "api_gateway": {
       "description": "あらゆるCLI、すべてのモデル",
-      "requires_running": "有効化後、PLC Studio を実行し続けてください — 外部 CLI は、PLC Studio がホストするゲートウェイに接続します。",
+      "requires_running": "有効化後、CKPLCStudio を実行し続けてください — 外部 CLI は、CKPLCStudio がホストするゲートウェイに接続します。",
       "title": "統合ゲートウェイ"
     },
     "apply_failed": "システムファイルへのCLI設定の書き込みに失敗しました",
@@ -4603,12 +4603,12 @@
       "select_other_provider": "他のプロバイダーを選択",
       "setup_hint": "ベストな体験のために、少なくとも1つのプロバイダーを設定してください",
       "subtitle": "プロバイダーに接続して、オールインワンAIワークステーションを始めましょう",
-      "title": "PLC Studioへようこそ"
+      "title": "CKPLCStudioへようこそ"
     }
   },
   "openclaw": {
     "checking_installation": "OpenClawのインストールを確認しています...",
-    "description": "PLC Studio プロバイダーを OpenClaw Gateway と統合し、Claude Code、Qwen-Coder などの AI コーディングエージェントを有効にします。",
+    "description": "CKPLCStudio プロバイダーを OpenClaw Gateway と統合し、Claude Code、Qwen-Coder などの AI コーディングエージェントを有効にします。",
     "error": {
       "select_provider_model": "プロバイダーとモデルをまず選択してください"
     },
@@ -4646,7 +4646,7 @@
       "title": "モデル設定"
     },
     "node_missing": {
-      "description": "OpenClawにはNode.js/npmが必要です。まずNode.jsをインストールしてから、PLC Studioを再起動してください。",
+      "description": "OpenClawにはNode.js/npmが必要です。まずNode.jsをインストールしてから、CKPLCStudioを再起動してください。",
       "download_button": "Node.jsをダウンロード",
       "hint": "macOS: brew install node | Windows: nodejs.org から LTS 版をダウンロード",
       "title": "Node.jsが必要"
@@ -5542,7 +5542,7 @@
           },
           "description": {
             "0": "テキスト選択ツールは、<strong>アクセシビリティー権限</strong>が必要です。",
-            "1": "「<strong>設定に移動</strong>」をクリックし、後で表示される権限要求ポップアップで「<strong>システム設定を開く</strong>」ボタンをクリックします。その後、表示されるアプリケーションリストで「<strong>PLC Studio</strong>」を見つけ、権限スイッチをオンにしてください。",
+            "1": "「<strong>設定に移動</strong>」をクリックし、後で表示される権限要求ポップアップで「<strong>システム設定を開く</strong>」ボタンをクリックします。その後、表示されるアプリケーションリストで「<strong>CKPLCStudio</strong>」を見つけ、権限スイッチをオンにしてください。",
             "2": "設定が完了したら、テキスト選択ツールを再起動してください。"
           },
           "title": "アクセシビリティー権限"
@@ -5554,7 +5554,7 @@
         "title": "アプリケーションフィルターリスト",
         "user_tips": {
           "mac": "アプリケーションのBundle IDを1行ずつ入力してください。大文字小文字は区別しません。例: com.google.Chrome, com.apple.mail, など。",
-          "windows": "アプリケーションの実行ファイル名を1行ずつ入力してください。大文字小文字は区別しません。例: chrome.exe, weixin.exe, PLCStudio.exe, など。"
+          "windows": "アプリケーションの実行ファイル名を1行ずつ入力してください。大文字小文字は区別しません。例: chrome.exe, weixin.exe, CKPLCStudio.exe, など。"
         }
       },
       "linux": {
@@ -5566,7 +5566,7 @@
         "wayland_checklist_subtitle": "Wayland エクスペリエンスを最適化するために、次の条件が満たされていることを確認してください：",
         "wayland_description": "Waylandセッションで実行中です。システムの制約により、一部のデスクトップ環境ではツールバーが選択したテキストに追随せず、画面中央にのみ表示される場合があります。完全な体験のためにはX11セッションへの切り替えを推奨します。",
         "wayland_title": "Waylandセッション通知",
-        "xwayland_fail": "有効ではありません。`--ozone-platform=x11` フラグを付けて PLC Studio を起動してください。",
+        "xwayland_fail": "有効ではありません。`--ozone-platform=x11` フラグを付けて CKPLCStudio を起動してください。",
         "xwayland_label": "XWaylandモード:",
         "xwayland_pass": "有効"
       },
@@ -5807,7 +5807,7 @@
         "select": "ディレクトリを変更",
         "select_error": "データディレクトリの変更に失敗しました",
         "select_error_in_app_path": "新しいパスはアプリのインストールパスと同じです。別のパスを選択してください",
-        "select_error_protected_path": "選択されたパスは、オペレーティングシステムまたはPLC Studioによって保護されています。別のフォルダを選択してください。",
+        "select_error_protected_path": "選択されたパスは、オペレーティングシステムまたはCKPLCStudioによって保護されています。別のフォルダを選択してください。",
         "select_error_root_path": "新しいパスはルートパスにできません",
         "select_error_same_path": "新しいパスは元のパスと同じです。別のパスを選択してください",
         "select_error_write_permission": "新しいパスに書き込み権限がありません",
@@ -6230,7 +6230,7 @@
           "title": "接続チェック"
         },
         "root_path": "ドキュメントルートパス",
-        "root_path_placeholder": "例：/PLCStudio",
+        "root_path_placeholder": "例：/CKPLCStudio",
         "title": "思源ノート設定",
         "token": {
           "help": "思源ノート->設定->について で取得",
@@ -6457,7 +6457,7 @@
         "uv": "Python package manager for MCP services and dependency installation."
       },
       "uninstall": "アンインストール",
-      "uninstallConfirmMessage": "\"{{name}}\"をアンインストールしてもよろしいですか？PLC Studioのバックエンドコピーが削除されます。",
+      "uninstallConfirmMessage": "\"{{name}}\"をアンインストールしてもよろしいですか？CKPLCStudioのバックエンドコピーが削除されます。",
       "uninstallConfirmTitle": "アンインストールツール",
       "uninstallFailed": "ツールのアンインストールに失敗しました",
       "uninstallSuccess": "ツールをアンインストールしました",

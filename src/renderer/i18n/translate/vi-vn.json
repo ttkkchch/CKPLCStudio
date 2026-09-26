@@ -33,7 +33,7 @@
     },
     "builtin": {
       "cherry_assistant": {
-        "description": "Cố vấn tích hợp PLC Studio. Chẩn đoán sự cố, hướng dẫn thao tác, thu thập câu hỏi thường gặp, gửi báo cáo lỗi/yêu cầu tính năng, và tìm kiếm/tạo Kỹ năng"
+        "description": "Cố vấn tích hợp CKPLCStudio. Chẩn đoán sự cố, hướng dẫn thao tác, thu thập câu hỏi thường gặp, gửi báo cáo lỗi/yêu cầu tính năng, và tìm kiếm/tạo Kỹ năng"
       }
     },
     "channels": {
@@ -1052,7 +1052,7 @@
     "authHeader": {
       "title": "Tiêu đề ủy quyền"
     },
-    "description": "Phơi bày khả năng AI của PLC Studio qua các API HTTP tương thích với OpenAI",
+    "description": "Phơi bày khả năng AI của CKPLCStudio qua các API HTTP tương thích với OpenAI",
     "documentation": {
       "title": "API Documentación"
     },
@@ -2081,7 +2081,7 @@
     },
     "api_gateway": {
       "description": "Bất kỳ CLI nào, mọi mô hình",
-      "requires_running": "Giữ PLC Studio chạy sau khi bật — CLI bên ngoài kết nối với cổng mà nó lưu trữ.",
+      "requires_running": "Giữ CKPLCStudio chạy sau khi bật — CLI bên ngoài kết nối với cổng mà nó lưu trữ.",
       "title": "Cổng thống nhất"
     },
     "apply_failed": "Không thể ghi cấu hình CLI vào tệp hệ thống",
@@ -4603,12 +4603,12 @@
       "select_other_provider": "Chọn Nhà Cung Cấp Khác",
       "setup_hint": "Vui lòng cấu hình ít nhất một nhà cung cấp để có trải nghiệm tốt nhất",
       "subtitle": "Kết nối nhà cung cấp để khởi động trạm làm việc AI tất cả trong một",
-      "title": "Chào mừng bạn đến với PLC Studio"
+      "title": "Chào mừng bạn đến với CKPLCStudio"
     }
   },
   "openclaw": {
     "checking_installation": "Đang kiểm tra cài đặt OpenClaw...",
-    "description": "Sử dụng các nhà cung cấp PLC Studio để cấp nguồn cho OpenClaw, trợ lý AI cá nhân của bạn hoạt động trên WhatsApp, Telegram, Slack, Discord và nhiều nền tảng khác.",
+    "description": "Sử dụng các nhà cung cấp CKPLCStudio để cấp nguồn cho OpenClaw, trợ lý AI cá nhân của bạn hoạt động trên WhatsApp, Telegram, Slack, Discord và nhiều nền tảng khác.",
     "error": {
       "select_provider_model": "Vui lòng chọn nhà cung cấp và mô hình trước"
     },
@@ -5542,7 +5542,7 @@
           },
           "description": {
             "0": "Trợ lý Lựa chọn yêu cầu <strong>Quyền Trợ năng</strong> để hoạt động bình thường.",
-            "1": "Vui lòng nhấp vào \"<strong>Đi tới Cài đặt</strong>\" và nhấp vào nút \"<strong>Mở Cài đặt Hệ thống</strong>\" trong cửa sổ yêu cầu quyền xuất hiện sau đó. Sau đó, tìm \"<strong>PLC Studio</strong>\" trong danh sách ứng dụng xuất hiện và bật công tắc quyền.",
+            "1": "Vui lòng nhấp vào \"<strong>Đi tới Cài đặt</strong>\" và nhấp vào nút \"<strong>Mở Cài đặt Hệ thống</strong>\" trong cửa sổ yêu cầu quyền xuất hiện sau đó. Sau đó, tìm \"<strong>CKPLCStudio</strong>\" trong danh sách ứng dụng xuất hiện và bật công tắc quyền.",
             "2": "Sau khi hoàn tất cài đặt, vui lòng mở lại trợ lý lựa chọn."
           },
           "title": "Quyền truy cập"
@@ -5554,7 +5554,7 @@
         "title": "Danh sách Bộ lọc Ứng dụng",
         "user_tips": {
           "mac": "Vui lòng nhập Bundle ID của ứng dụng, mỗi dòng một cái, không phân biệt chữ hoa chữ thường, có thể khớp mờ. Ví dụ: com.google.Chrome, com.apple.mail, v.v.",
-          "windows": "Vui lòng nhập tên tệp thực thi của ứng dụng, mỗi dòng một cái, không phân biệt chữ hoa chữ thường, có thể khớp mờ. Ví dụ: chrome.exe, weixin.exe, PLCStudio.exe, v.v."
+          "windows": "Vui lòng nhập tên tệp thực thi của ứng dụng, mỗi dòng một cái, không phân biệt chữ hoa chữ thường, có thể khớp mờ. Ví dụ: chrome.exe, weixin.exe, CKPLCStudio.exe, v.v."
         }
       },
       "linux": {
@@ -5566,7 +5566,7 @@
         "wayland_checklist_subtitle": "Đảm bảo các điều kiện sau được thỏa mãn để tối ưu hóa trải nghiệm Wayland:",
         "wayland_description": "Bạn đang ở trong phiên Wayland. Do giới hạn của hệ thống, thanh công cụ có thể chỉ xuất hiện ở giữa màn hình thay vì theo văn bản được chọn trên một số môi trường máy tính để bàn. Khuyến nghị chuyển sang phiên X11 để có trải nghiệm đầy đủ.",
         "wayland_title": "Thông báo phiên Wayland",
-        "xwayland_fail": "Chưa được kích hoạt, vui lòng khởi chạy PLC Studio với cờ `--ozone-platform=x11`",
+        "xwayland_fail": "Chưa được kích hoạt, vui lòng khởi chạy CKPLCStudio với cờ `--ozone-platform=x11`",
         "xwayland_label": "Chế độ XWayland:",
         "xwayland_pass": "Đã bật"
       },
@@ -5807,7 +5807,7 @@
         "select": "Sửa đổi thư mục",
         "select_error": "Không thể thay đổi thư mục dữ liệu",
         "select_error_in_app_path": "Đường dẫn mới trùng với đường dẫn cài đặt ứng dụng, vui lòng chọn đường dẫn khác",
-        "select_error_protected_path": "Đường dẫn được chọn được bảo vệ bởi hệ điều hành hoặc PLC Studio. Vui lòng chọn một thư mục khác.",
+        "select_error_protected_path": "Đường dẫn được chọn được bảo vệ bởi hệ điều hành hoặc CKPLCStudio. Vui lòng chọn một thư mục khác.",
         "select_error_root_path": "Nouveau chemin ne peut pas être le chemin racine",
         "select_error_same_path": "Đường dẫn mới giống với đường dẫn cũ, vui lòng chọn đường dẫn khác",
         "select_error_write_permission": "Đường dẫn mới không có quyền ghi",
@@ -6230,7 +6230,7 @@
           "title": "Kiểm tra kết nối"
         },
         "root_path": "Đường dẫn gốc của Siyuan Note",
-        "root_path_placeholder": "ví dụ: /PLCStudio",
+        "root_path_placeholder": "ví dụ: /CKPLCStudio",
         "title": "Cấu hình Siyuan Note",
         "token": {
           "help": "Lấy mã thông báo Siyuan Note",
@@ -6457,7 +6457,7 @@
         "uv": "Python package manager for MCP services and dependency installation."
       },
       "uninstall": "Gỡ cài đặt",
-      "uninstallConfirmMessage": "Bạn có chắc chắn muốn gỡ cài đặt \"{{name}}\"? Bản sao backend của PLC Studio sẽ bị xóa.",
+      "uninstallConfirmMessage": "Bạn có chắc chắn muốn gỡ cài đặt \"{{name}}\"? Bản sao backend của CKPLCStudio sẽ bị xóa.",
       "uninstallConfirmTitle": "Công cụ Gỡ cài đặt",
       "uninstallFailed": "Không thể gỡ cài đặt công cụ",
       "uninstallSuccess": "Công cụ đã được gỡ cài đặt",

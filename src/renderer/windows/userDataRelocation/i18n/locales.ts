@@ -8,13 +8,13 @@ export const relocationLocales = {
         committing: 'Saving new data directory...',
         completed: {
           title: 'Migration complete',
-          description: 'Restart PLC Studio to use the new data directory.'
+          description: 'Restart CKPLCStudio to use the new data directory.'
         },
         failed: {
           title: 'Migration failed',
-          description: 'PLC Studio will keep using the previous data directory.'
+          description: 'CKPLCStudio will keep using the previous data directory.'
         },
-        restart_success: 'Restart PLC Studio',
+        restart_success: 'Restart CKPLCStudio',
         restart_failure: 'Continue with Previous Directory',
         from: 'Current directory',
         to: 'New directory'
@@ -30,13 +30,13 @@ export const relocationLocales = {
         committing: '正在保存新的数据目录...',
         completed: {
           title: '迁移完成',
-          description: '请重启 PLC Studio 以使用新的数据目录。'
+          description: '请重启 CKPLCStudio 以使用新的数据目录。'
         },
         failed: {
           title: '迁移失败',
-          description: 'PLC Studio 将继续使用原数据目录。'
+          description: 'CKPLCStudio 将继续使用原数据目录。'
         },
-        restart_success: '重启 PLC Studio',
+        restart_success: '重启 CKPLCStudio',
         restart_failure: '继续使用原数据目录',
         from: '当前目录',
         to: '新目录'
@@ -52,13 +52,13 @@ export const relocationLocales = {
         committing: '正在儲存新的資料目錄...',
         completed: {
           title: '遷移完成',
-          description: '請重新啟動 PLC Studio 以使用新的資料目錄。'
+          description: '請重新啟動 CKPLCStudio 以使用新的資料目錄。'
         },
         failed: {
           title: '遷移失敗',
-          description: 'PLC Studio 將繼續使用原資料目錄。'
+          description: 'CKPLCStudio 將繼續使用原資料目錄。'
         },
-        restart_success: '重新啟動 PLC Studio',
+        restart_success: '重新啟動 CKPLCStudio',
         restart_failure: '繼續使用原資料目錄',
         from: '目前目錄',
         to: '新目錄'

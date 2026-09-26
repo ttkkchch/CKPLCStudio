@@ -33,7 +33,7 @@
     },
     "builtin": {
       "cherry_assistant": {
-        "description": "Assistant intégré PLC Studio. Diagnostiquer les problèmes, guider les opérations, collecter les FAQ, soumettre des bugs/demandes de fonctionnalités, et rechercher/créer des Compétences"
+        "description": "Assistant intégré CKPLCStudio. Diagnostiquer les problèmes, guider les opérations, collecter les FAQ, soumettre des bugs/demandes de fonctionnalités, et rechercher/créer des Compétences"
       }
     },
     "channels": {
@@ -1052,7 +1052,7 @@
     "authHeader": {
       "title": "En-tête d'autorisation"
     },
-    "description": "Expose les capacités IA de PLC Studio via des APIs HTTP compatibles OpenAI",
+    "description": "Expose les capacités IA de CKPLCStudio via des APIs HTTP compatibles OpenAI",
     "documentation": {
       "title": "Documentation API"
     },
@@ -2081,7 +2081,7 @@
     },
     "api_gateway": {
       "description": "Toute CLI, tous les modèles",
-      "requires_running": "Gardez PLC Studio en cours d'exécution après l'activation — l'interface CLI externe se connecte à la passerelle qu'il héberge.",
+      "requires_running": "Gardez CKPLCStudio en cours d'exécution après l'activation — l'interface CLI externe se connecte à la passerelle qu'il héberge.",
       "title": "Passerelle unifiée"
     },
     "apply_failed": "Échec de l'écriture de la configuration CLI dans le fichier système",
@@ -4603,12 +4603,12 @@
       "select_other_provider": "Sélectionner un autre fournisseur",
       "setup_hint": "Veuillez configurer au moins un fournisseur pour une meilleure expérience",
       "subtitle": "Connectez un fournisseur pour activer votre station de travail IA tout-en-un",
-      "title": "Bienvenue à PLC Studio"
+      "title": "Bienvenue à CKPLCStudio"
     }
   },
   "openclaw": {
     "checking_installation": "Vérification de l'installation d'OpenClaw...",
-    "description": "Intégrer les fournisseurs PLC Studio avec la passerelle OpenClaw pour permettre aux agents de codage IA comme Claude Code, Qwen-Coder, et bien d'autres.",
+    "description": "Intégrer les fournisseurs CKPLCStudio avec la passerelle OpenClaw pour permettre aux agents de codage IA comme Claude Code, Qwen-Coder, et bien d'autres.",
     "error": {
       "select_provider_model": "Veuillez d'abord sélectionner un fournisseur et un modèle"
     },
@@ -4646,7 +4646,7 @@
       "title": "Configuration du modèle"
     },
     "node_missing": {
-      "description": "OpenClaw nécessite Node.js/npm. Veuillez d'abord installer Node.js, puis redémarrez PLC Studio.",
+      "description": "OpenClaw nécessite Node.js/npm. Veuillez d'abord installer Node.js, puis redémarrez CKPLCStudio.",
       "download_button": "Télécharger Node.js",
       "hint": "macOS : brew install node | Windows : Télécharger la version LTS depuis nodejs.org",
       "title": "Node.js requis"
@@ -5542,7 +5542,7 @@
           },
           "description": {
             "0": "L'assistant de sélection de texte a besoin de l'autorisation de « <strong>fonctionnalités d'accessibilité</strong> » pour fonctionner correctement.",
-            "1": "Veuillez cliquer sur « <strong>aller aux paramètres</strong> », puis dans la fenêtre contextuelle de demande d'autorisation qui apparaîtra ensuite, cliquez sur le bouton « <strong>ouvrir les paramètres système</strong> », recherchez ensuite « <strong>PLC Studio</strong> » dans la liste des applications qui suit, puis activez l'interrupteur d'autorisation.",
+            "1": "Veuillez cliquer sur « <strong>aller aux paramètres</strong> », puis dans la fenêtre contextuelle de demande d'autorisation qui apparaîtra ensuite, cliquez sur le bouton « <strong>ouvrir les paramètres système</strong> », recherchez ensuite « <strong>CKPLCStudio</strong> » dans la liste des applications qui suit, puis activez l'interrupteur d'autorisation.",
             "2": "Une fois la configuration terminée, veuillez réactiver l'assistant de sélection de texte."
           },
           "title": "Autorisations d'accessibilité"
@@ -5554,7 +5554,7 @@
         "title": "Liste de sélection des applications",
         "user_tips": {
           "mac": "Veuillez saisir l'ID de bundle de l'application, un par ligne, sans sensibilité à la casse, correspondance floue possible. Par exemple : com.google.Chrome, com.apple.mail, etc.",
-          "windows": "Veuillez saisir le nom du fichier exécutable de l'application, un par ligne, sans sensibilité à la casse, correspondance floue possible. Par exemple : chrome.exe, weixin.exe, PLCStudio.exe, etc."
+          "windows": "Veuillez saisir le nom du fichier exécutable de l'application, un par ligne, sans sensibilité à la casse, correspondance floue possible. Par exemple : chrome.exe, weixin.exe, CKPLCStudio.exe, etc."
         }
       },
       "linux": {
@@ -5566,7 +5566,7 @@
         "wayland_checklist_subtitle": "Assurez-vous que les conditions suivantes sont remplies pour optimiser l’expérience Wayland :",
         "wayland_description": "Vous êtes dans une session Wayland. En raison de limitations système, la barre d’outils peut apparaître uniquement au centre de l’écran au lieu de suivre le texte sélectionné sur certains environnements de bureau. Il est recommandé de passer à une session X11 pour bénéficier de l’expérience complète.",
         "wayland_title": "Avis de session Wayland",
-        "xwayland_fail": "Non activé, veuillez lancer PLC Studio avec le drapeau `--ozone-platform=x11`",
+        "xwayland_fail": "Non activé, veuillez lancer CKPLCStudio avec le drapeau `--ozone-platform=x11`",
         "xwayland_label": "Mode XWayland :",
         "xwayland_pass": "Activé"
       },
@@ -5807,7 +5807,7 @@
         "select": "Modifier le répertoire",
         "select_error": "Échec de la modification du répertoire des données",
         "select_error_in_app_path": "Le nouveau chemin est identique au chemin d'installation de l'application, veuillez choisir un autre chemin",
-        "select_error_protected_path": "Le chemin sélectionné est protégé par le système d'exploitation ou PLC Studio. Veuillez choisir un autre dossier.",
+        "select_error_protected_path": "Le chemin sélectionné est protégé par le système d'exploitation ou CKPLCStudio. Veuillez choisir un autre dossier.",
         "select_error_root_path": "Le nouveau chemin ne peut pas être le chemin racine",
         "select_error_same_path": "Le nouveau chemin est identique à l'ancien, veuillez choisir un autre chemin",
         "select_error_write_permission": "Le nouveau chemin n'a pas de permissions d'écriture",
@@ -6230,7 +6230,7 @@
           "title": "Проверка подключения"
         },
         "root_path": "Корневой путь документа",
-        "root_path_placeholder": "Например: /PLCStudio",
+        "root_path_placeholder": "Например: /CKPLCStudio",
         "title": "Настройка CherryNote",
         "token": {
           "help": "Получить в разделе CherryNote -> Настройки -> О программе",
@@ -6457,7 +6457,7 @@
         "uv": "Python package manager for MCP services and dependency installation."
       },
       "uninstall": "Désinstaller",
-      "uninstallConfirmMessage": "Êtes-vous sûr de vouloir désinstaller \"{{name}}\" ? La copie backend de PLC Studio sera supprimée.",
+      "uninstallConfirmMessage": "Êtes-vous sûr de vouloir désinstaller \"{{name}}\" ? La copie backend de CKPLCStudio sera supprimée.",
       "uninstallConfirmTitle": "Outil de désinstallation",
       "uninstallFailed": "Échec de la désinstallation de l'outil",
       "uninstallSuccess": "Outil désinstallé",

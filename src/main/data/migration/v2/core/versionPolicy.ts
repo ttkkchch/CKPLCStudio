@@ -233,7 +233,7 @@ export function getBlockMessage(reason: VersionBlockReason, details: Record<stri
   switch (reason) {
     case 'no_version_log':
       return (
-        `Cannot determine your previous PLC Studio version.\n\n` +
+        `Cannot determine your previous CKPLCStudio version.\n\n` +
         `Please install version ${details.requiredVersion} first and run it at least once, ` +
         `then install this version to complete the data migration.`
       )

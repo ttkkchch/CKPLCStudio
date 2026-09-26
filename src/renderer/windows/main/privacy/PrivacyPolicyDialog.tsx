@@ -26,7 +26,7 @@ export function getPrivacyPolicyAsset(language: string): 'privacy-en.html' | 'pr
 
 export function buildPrivacyPolicyUrl(resourcesPath: string, language: string, theme: ThemeMode): string {
   const filePath = AbsoluteFilePathSchema.parse(
-    joinPath(resourcesPath, `plc-studio/${getPrivacyPolicyAsset(language)}`)
+    joinPath(resourcesPath, `ckplcstudio/${getPrivacyPolicyAsset(language)}`)
   )
   const themeName = theme === ThemeMode.dark ? 'dark' : 'light'
   return `${toFileUrl(filePath)}?theme=${themeName}`

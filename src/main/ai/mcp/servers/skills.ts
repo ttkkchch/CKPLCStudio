@@ -29,7 +29,7 @@ const SEARCH_TOOL: Tool = {
 const INSTALL_TOOL: Tool = {
   name: 'install_skill',
   description:
-    "Install ONE marketplace skill into PLC Studio's managed library and enable it for the current agent. Pass the exact `install_source` string from a search_skills result — do NOT construct it yourself, and do NOT run `npx skills add`, `git clone`, or any shell command. Cherry clones the repo, installs just that single skill, and registers it. Call this only when the user intends to install the skill; the active Claude permission mode controls whether execution prompts or runs directly.",
+    "Install ONE marketplace skill into CKPLCStudio's managed library and enable it for the current agent. Pass the exact `install_source` string from a search_skills result — do NOT construct it yourself, and do NOT run `npx skills add`, `git clone`, or any shell command. CKPLCStudio clones the repo, installs just that single skill, and registers it. Call this only when the user intends to install the skill; the active Claude permission mode controls whether execution prompts or runs directly.",
   inputSchema: {
     type: 'object',
     properties: {

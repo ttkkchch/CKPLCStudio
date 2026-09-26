@@ -117,7 +117,9 @@ describe('ProtocolService', () => {
 
     await (service as any).onInit()
 
-    expect(appMock.setAsDefaultProtocolClient).toHaveBeenCalledTimes(1)
+    // Both the primary (ckplcstudio) and the legacy (cherrystudio) schemes are registered.
+    expect(appMock.setAsDefaultProtocolClient).toHaveBeenCalledTimes(2)
+    expect(appMock.setAsDefaultProtocolClient).toHaveBeenCalledWith('ckplcstudio')
     expect(appMock.setAsDefaultProtocolClient).toHaveBeenCalledWith('cherrystudio')
   })
 
@@ -127,7 +129,10 @@ describe('ProtocolService', () => {
 
     await (service as any).onInit()
 
-    expect(appMock.setAsDefaultProtocolClient).toHaveBeenCalledTimes(1)
+    expect(appMock.setAsDefaultProtocolClient).toHaveBeenCalledTimes(2)
+    expect(appMock.setAsDefaultProtocolClient).toHaveBeenCalledWith('ckplcstudio', process.execPath, [
+      path.resolve(process.cwd(), '.')
+    ])
     expect(appMock.setAsDefaultProtocolClient).toHaveBeenCalledWith('cherrystudio', process.execPath, [
       path.resolve(process.cwd(), '.')
     ])

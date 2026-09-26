@@ -81,7 +81,9 @@ patchedDependencies:
 
 allowBuilds:
   '@j178/prek': true
-  '@paymoapp/electron-shutdown-handler': true
+  # 本机无 Visual Studio C++ 工作负载时跳过编译；运行时 PowerService 会 catch
+  # require 失败并降级到 Electron powerMonitor 兜底（见 initWindowsShutdownHandler）
+  '@paymoapp/electron-shutdown-handler': false
   '@scarf/scarf': true
   '@swc/core': true
   better-sqlite3: true
