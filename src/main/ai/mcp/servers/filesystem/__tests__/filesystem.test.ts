@@ -28,6 +28,19 @@ describe('filesystem MCP security', () => {
     await Promise.all(tempDirs.splice(0).map((tempDir) => fs.rm(tempDir, { recursive: true, force: true })))
   })
 
+  // Windows without elevation/Developer Mode rejects file symlinks with EPERM,
+  // but directory junctions need no privileges and behave identically to
+  // symlinks for fs.realpath/stat/readdir — the exact APIs the escape guards
+  // rely on. Every escape below is therefore built as a junctioned directory
+  // inside the root pointing at an outside directory; the guarded path reaches
+  // the outside file through it, so realpath still resolves outside the root.
+  // The 'junction' type is ignored on POSIX (plain symlink there).
+  async function junctionEscape(workspaceRoot: string, outsideRoot: string, fileName: string): Promise<string> {
+    const escapeDir = path.join(workspaceRoot, 'escape-dir')
+    await fs.symlink(outsideRoot, escapeDir, 'junction')
+    return path.join(escapeDir, fileName)
+  }
+
   it('prefers WORKSPACE_ROOT and falls back to args for filesystem root', () => {
     expect(resolveFilesystemBaseDir(['C:/args-root'], {})).toBe('C:/args-root')
     expect(resolveFilesystemBaseDir(['C:/args-root'], { WORKSPACE_ROOT: 'C:/env-root' })).toBe('C:/env-root')
@@ -51,12 +64,11 @@ describe('filesystem MCP security', () => {
     const workspaceRoot = await createTempDir('filesystem-symlink-root-')
     const outsideRoot = await createTempDir('filesystem-symlink-outside-')
     const outsideFile = path.join(outsideRoot, 'secret.txt')
-    const symlinkPath = path.join(workspaceRoot, 'escape-link')
 
     await fs.writeFile(outsideFile, 'top-secret')
-    await fs.symlink(outsideFile, symlinkPath)
+    const escapedPath = await junctionEscape(workspaceRoot, outsideRoot, 'secret.txt')
 
-    await expect(validatePath(symlinkPath, workspaceRoot)).rejects.toThrow('outside the configured workspace root')
+    await expect(validatePath(escapedPath, workspaceRoot)).rejects.toThrow('outside the configured workspace root')
   })
 
   it('rejects relative path traversal outside the configured root', async () => {
@@ -100,10 +112,10 @@ describe('filesystem MCP security', () => {
     await fs.writeFile(legitFile, 'legit')
     await fs.writeFile(secretFile, 'secret')
 
-    // Create a symlink inside workspace pointing to the outside directory
-    await fs.symlink(outsideRoot, path.join(workspaceRoot, 'escape-dir'))
+    // Create a junction inside workspace pointing to the outside directory
+    await fs.symlink(outsideRoot, path.join(workspaceRoot, 'escape-dir'), 'junction')
 
-    // Mock ripgrep to return both files (simulating --follow traversing the symlink)
+    // Mock ripgrep to return both files (simulating --follow traversing the link)
     vi.spyOn(types, 'runRipgrep').mockResolvedValue({
       ok: true,
       stdout: [legitFile, secretFile].join('\n'),
@@ -125,14 +137,14 @@ describe('filesystem MCP security', () => {
     await fs.mkdir(path.join(outsideRoot, 'private'))
     await fs.writeFile(path.join(outsideRoot, 'private', 'secret.txt'), 'secret')
 
-    // Create a symlink inside workspace pointing to the outside directory
-    await fs.symlink(outsideRoot, path.join(workspaceRoot, 'escape-dir'))
+    // Create a junction inside workspace pointing to the outside directory
+    await fs.symlink(outsideRoot, path.join(workspaceRoot, 'escape-dir'), 'junction')
 
     const result = await handleLsTool({ recursive: true }, workspaceRoot)
     const text = result.content[0].text
 
     expect(text).toContain('legit.txt')
-    // The symlink entry itself may appear, but its children should not be listed
+    // The junction entry itself may appear, but its children should not be listed
     expect(text).not.toContain('secret.txt')
   })
 
@@ -153,10 +165,9 @@ describe('filesystem MCP security', () => {
         code: 'ENOENT'
       })
 
-      // Symlink inside the workspace pointing outside it must be rejected before writing.
-      const symlinkPath = path.join(workspaceRoot, 'escape-link')
-      await fs.symlink(outsideFile, symlinkPath)
-      await expect(handleWriteTool({ file_path: 'escape-link', content: 'pwned' }, workspaceRoot)).rejects.toThrow(
+      // A junctioned dir inside the workspace reaching outside it must be rejected before writing.
+      const escapedPath = await junctionEscape(workspaceRoot, outsideRoot, 'target.txt')
+      await expect(handleWriteTool({ file_path: escapedPath, content: 'pwned' }, workspaceRoot)).rejects.toThrow(
         ESCAPE_ERROR
       )
       await expect(fs.readFile(outsideFile, 'utf-8')).resolves.toBe('original')
@@ -173,10 +184,9 @@ describe('filesystem MCP security', () => {
       ).rejects.toThrow(ESCAPE_ERROR)
       await expect(fs.readFile(outsideFile, 'utf-8')).resolves.toBe('original')
 
-      const symlinkPath = path.join(workspaceRoot, 'escape-link')
-      await fs.symlink(outsideFile, symlinkPath)
+      const escapedPath = await junctionEscape(workspaceRoot, outsideRoot, 'target.txt')
       await expect(
-        handleEditTool({ file_path: 'escape-link', old_string: 'original', new_string: 'pwned' }, workspaceRoot)
+        handleEditTool({ file_path: escapedPath, old_string: 'original', new_string: 'pwned' }, workspaceRoot)
       ).rejects.toThrow(ESCAPE_ERROR)
       await expect(fs.readFile(outsideFile, 'utf-8')).resolves.toBe('original')
     })
@@ -190,10 +200,9 @@ describe('filesystem MCP security', () => {
       await expect(handleDeleteTool({ path: '../target.txt' }, workspaceRoot)).rejects.toThrow(ESCAPE_ERROR)
       await expect(fs.readFile(outsideFile, 'utf-8')).resolves.toBe('keep-me')
 
-      const symlinkPath = path.join(workspaceRoot, 'escape-link')
-      await fs.symlink(outsideFile, symlinkPath)
-      await expect(handleDeleteTool({ path: 'escape-link' }, workspaceRoot)).rejects.toThrow(ESCAPE_ERROR)
-      // Both the symlink and its target must survive.
+      const escapedPath = await junctionEscape(workspaceRoot, outsideRoot, 'target.txt')
+      await expect(handleDeleteTool({ path: escapedPath }, workspaceRoot)).rejects.toThrow(ESCAPE_ERROR)
+      // The junction and its target must survive.
       await expect(fs.readFile(outsideFile, 'utf-8')).resolves.toBe('keep-me')
     })
 
@@ -205,9 +214,9 @@ describe('filesystem MCP security', () => {
 
       await expect(handleReadTool({ file_path: '../secret.txt' }, workspaceRoot)).rejects.toThrow(ESCAPE_ERROR)
 
-      const symlinkPath = path.join(workspaceRoot, 'escape-link')
-      await fs.symlink(outsideFile, symlinkPath)
-      await expect(handleReadTool({ file_path: 'escape-link' }, workspaceRoot)).rejects.toThrow(ESCAPE_ERROR)
+      const escapedPath = await junctionEscape(workspaceRoot, outsideRoot, 'secret.txt')
+      await expect(handleReadTool({ file_path: escapedPath }, workspaceRoot)).rejects.toThrow(ESCAPE_ERROR)
+      await expect(fs.readFile(outsideFile, 'utf-8')).resolves.toBe('top-secret')
     })
   })
 })
