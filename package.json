@@ -1,6 +1,6 @@
 {
   "name": "ckplcstudio",
-  "version": "2.0.0-rc.1",
+  "version": "2.0.0-rc.2",
   "private": true,
   "description": "AI-powered TIA Portal PLC programming studio",
   "desktopName": "CKPLCStudio.desktop",

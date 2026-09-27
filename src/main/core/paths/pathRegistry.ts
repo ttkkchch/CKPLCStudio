@@ -107,6 +107,9 @@ export function buildPathRegistry() {
     'feature.mcp.workspace': path.join(appUserDataData, 'Workspace'),
     // MCP memory server's knowledge-graph JSON for the built-in MCP server
     'feature.mcp.memory_file': path.join(CHERRY_HOME, 'config', 'memory.json'),
+    // TIA workspace: per-project session notes for the TIA Engineer assistant
+    // (always-whitelisted root of the @cherry/tia-workspace MCP server)
+    'feature.tia.workspace': path.join(appUserDataData, 'tia_workspace'),
 
     // Copilot token
     'feature.copilot.token_file': path.join(CHERRY_HOME, 'config', '.copilot_token'),

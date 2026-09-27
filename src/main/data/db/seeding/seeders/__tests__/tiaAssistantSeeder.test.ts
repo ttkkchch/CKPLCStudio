@@ -9,6 +9,7 @@ import { TIA_MCP_COMMAND, TIA_MCP_SERVER_NAME } from '../tiaMcpSeeder'
 import {
   TIA_ASSISTANT_DESCRIPTION,
   TIA_ASSISTANT_EMOJI,
+  TIA_ASSISTANT_ID,
   TIA_ASSISTANT_NAME,
   TIA_ASSISTANT_NAME_ZH,
   TIA_ASSISTANT_PROMPT
@@ -117,8 +118,10 @@ describe('TiaAssistantSeeder', () => {
 
   it('never rewrites a user-edited prompt, but back-fills a missing binding without activating', async () => {
     await seedMcpServer()
+    // The factory assistant is recognized by its stable id only (never by name),
+    // so the user-edited row must carry TIA_ASSISTANT_ID to hit the repair path.
     await dbh.db.insert(assistantTable).values({
-      id: 'asst-user-edited',
+      id: TIA_ASSISTANT_ID,
       name: TIA_ASSISTANT_NAME_ZH,
       emoji: '🔧',
       prompt: '用户自定义提示词',
@@ -135,12 +138,12 @@ describe('TiaAssistantSeeder', () => {
       .from(assistantTable)
       .where(eq(assistantTable.name, TIA_ASSISTANT_NAME_ZH))
     expect(assistant.prompt).toBe('用户自定义提示词')
-    expect(assistant.id).toBe('asst-user-edited')
+    expect(assistant.id).toBe(TIA_ASSISTANT_ID)
 
     const bindings = await dbh.db
       .select()
       .from(assistantMcpServerTable)
-      .where(eq(assistantMcpServerTable.assistantId, 'asst-user-edited'))
+      .where(eq(assistantMcpServerTable.assistantId, TIA_ASSISTANT_ID))
     expect(bindings).toHaveLength(1)
 
     // Repair path must not flip the user's own server toggle.

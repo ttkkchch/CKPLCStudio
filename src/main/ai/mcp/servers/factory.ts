@@ -11,6 +11,7 @@ import { FileSystemServer, resolveFilesystemBaseDir } from './filesystem'
 import MemoryServer from './memory'
 import PythonServer from './python'
 import ThinkingServer from './sequentialthinking'
+import { TiaWorkspaceServer } from './tiaWorkspace'
 
 const logger = loggerService.withContext('McpFactory')
 
@@ -50,6 +51,9 @@ export function createInMemoryMcpServer(
     }
     case BuiltinMcpServerNames.browser: {
       return new BrowserServer().server
+    }
+    case BuiltinMcpServerNames.tiaWorkspace: {
+      return new TiaWorkspaceServer(envs.TIA_EXTRA_ROOTS).server
     }
     default:
       throw new Error(`Unknown in-memory MCP server: ${name}`)

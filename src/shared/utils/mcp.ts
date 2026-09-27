@@ -15,7 +15,8 @@ export const BuiltinMcpServerNames = {
   didiMcp: '@cherry/didi-mcp',
   browser: '@cherry/browser',
   nowledgeMem: '@cherry/nowledge-mem',
-  hub: '@cherry/hub'
+  hub: '@cherry/hub',
+  tiaWorkspace: '@cherry/tia-workspace'
 } as const
 
 export type BuiltinMcpServerName = (typeof BuiltinMcpServerNames)[keyof typeof BuiltinMcpServerNames]

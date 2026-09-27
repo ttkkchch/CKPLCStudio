@@ -14,18 +14,25 @@ import { app } from 'electron'
 import type { DbOrTx, DbType, ISeeder } from '../../types'
 import { hashObject } from '../hashObject'
 import { TIA_MCP_SERVER_NAME } from './tiaMcpSeeder'
+import { TIA_WORKSPACE_MCP_SERVER_NAME } from './tiaWorkspaceMcpSeeder'
 
 const logger = loggerService.withContext('TiaAssistantSeeder')
+
+/**
+ * MCP servers the factory assistant must be bound to. A missing binding for
+ * any of them is back-filled on seeder re-runs (repair path).
+ */
+const REQUIRED_MCP_SERVER_NAMES = [TIA_MCP_SERVER_NAME, TIA_WORKSPACE_MCP_SERVER_NAME]
 
 /**
  * Seed the bundled "TIA Engineer" assistant (CKPLCStudio factory assistant):
  *
  * - Inserts the assistant with the self-authored TIA prompt, pinned first in the
  *   assistant list (position 'first') so it acts as the out-of-box default pick.
- * - Binds it to the seeded TIA Portal MCP server (assistant_mcp_server junction).
- * - On first creation only, flips the bundled MCP server row to isActive so the
- *   assistant works out of the box; a later user toggle is never overwritten
- *   because the flip happens solely inside this first-insert transaction.
+ * - Binds it to the seeded TIA MCP servers (assistant_mcp_server junction).
+ * - On first creation only, flips bundled, currently-inactive MCP server rows to
+ *   active so the assistant works out of the box; a later user toggle is never
+ *   overwritten because the flip happens solely inside this first-insert transaction.
  *
  * Insert-repair semantics: an existing assistant (either locale name) is never
  * rewritten — the user may have edited the prompt. Only a missing MCP binding is
@@ -53,8 +60,8 @@ export class TiaAssistantSeeder implements ISeeder {
     db.transaction((tx) => {
       const [existing] = this.findSeededAssistant(tx)
       if (existing) {
-        // Repair path: back-fill a missing MCP binding only; never touch user edits.
-        this.ensureBinding(tx, existing.id as string, /* activateServer */ false)
+        // Repair path: back-fill missing MCP bindings only; never touch user edits.
+        this.ensureBindings(tx, existing.id as string, /* activateServers */ false)
         return
       }
 
@@ -85,7 +92,7 @@ export class TiaAssistantSeeder implements ISeeder {
         }
       )
 
-      this.ensureBinding(tx, assistant.id as string, /* activateServer */ true)
+      this.ensureBindings(tx, assistant.id as string, /* activateServers */ true)
       logger.info('Seeded TIA Engineer assistant', { assistantId: assistant.id })
     })
   }
@@ -106,36 +113,48 @@ export class TiaAssistantSeeder implements ISeeder {
   }
 
   /**
-   * Bind the assistant to the TIA Portal MCP server when both exist and the
-   * binding is absent. With `activateServer`, a bundled, currently-inactive
+   * Bind the assistant to each required MCP server that exists, when the
+   * binding is absent. With `activateServers`, a bundled, currently-inactive
    * server is flipped to active inside the same transaction (first insert only).
+   * A missing server row is logged and skipped (it may be platform-gated).
    */
-  private ensureBinding(tx: DbOrTx, assistantId: string, activateServer: boolean): void {
-    const [server] = tx
-      .select({ id: mcpServerTable.id, isActive: mcpServerTable.isActive, installSource: mcpServerTable.installSource })
-      .from(mcpServerTable)
-      .where(eq(mcpServerTable.name, TIA_MCP_SERVER_NAME))
-      .limit(1)
-      .all()
+  private ensureBindings(tx: DbOrTx, assistantId: string, activateServers: boolean): void {
+    for (const serverName of REQUIRED_MCP_SERVER_NAMES) {
+      const [server] = tx
+        .select({
+          id: mcpServerTable.id,
+          isActive: mcpServerTable.isActive,
+          installSource: mcpServerTable.installSource
+        })
+        .from(mcpServerTable)
+        .where(eq(mcpServerTable.name, serverName))
+        .limit(1)
+        .all()
 
-    if (!server) {
-      logger.warn('TIA Portal MCP server not found, assistant seeded without binding', { assistantId })
-      return
-    }
+      if (!server) {
+        logger.warn('Required MCP server not found, assistant seeded without its binding', {
+          assistantId,
+          serverName
+        })
+        continue
+      }
 
-    const [binding] = tx
-      .select({ assistantId: assistantMcpServerTable.assistantId })
-      .from(assistantMcpServerTable)
-      .where(and(eq(assistantMcpServerTable.assistantId, assistantId), eq(assistantMcpServerTable.mcpServerId, server.id)))
-      .limit(1)
-      .all()
+      const [binding] = tx
+        .select({ assistantId: assistantMcpServerTable.assistantId })
+        .from(assistantMcpServerTable)
+        .where(
+          and(eq(assistantMcpServerTable.assistantId, assistantId), eq(assistantMcpServerTable.mcpServerId, server.id))
+        )
+        .limit(1)
+        .all()
 
-    if (!binding) {
-      tx.insert(assistantMcpServerTable).values({ assistantId, mcpServerId: server.id }).run()
-    }
+      if (!binding) {
+        tx.insert(assistantMcpServerTable).values({ assistantId, mcpServerId: server.id }).run()
+      }
 
-    if (activateServer && !server.isActive && server.installSource === 'builtin') {
-      tx.update(mcpServerTable).set({ isActive: true }).where(eq(mcpServerTable.id, server.id)).run()
+      if (activateServers && !server.isActive && server.installSource === 'builtin') {
+        tx.update(mcpServerTable).set({ isActive: true }).where(eq(mcpServerTable.id, server.id)).run()
+      }
     }
   }
 
