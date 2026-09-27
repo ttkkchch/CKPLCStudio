@@ -5,6 +5,7 @@ import { loggerService } from '@logger'
 import { insertWithOrderKey } from '@data/services/utils/orderKey'
 import {
   TIA_ASSISTANT_ID,
+  TIA_ASSISTANT_PROMPT,
   TIA_ASSISTANT_SEED,
   getTiaAssistantNameForLocale
 } from '@shared/data/presets/tiaAssistant'
@@ -14,6 +15,7 @@ import { app } from 'electron'
 import type { DbOrTx, DbType, ISeeder } from '../../types'
 import { hashObject } from '../hashObject'
 import { TIA_MCP_SERVER_NAME } from './tiaMcpSeeder'
+import { isOutdatedFactoryPrompt } from './tiaAssistantPromptHistory'
 import { TIA_WORKSPACE_MCP_SERVER_NAME } from './tiaWorkspaceMcpSeeder'
 
 const logger = loggerService.withContext('TiaAssistantSeeder')
@@ -34,11 +36,14 @@ const REQUIRED_MCP_SERVER_NAMES = [TIA_MCP_SERVER_NAME, TIA_WORKSPACE_MCP_SERVER
  *   active so the assistant works out of the box; a later user toggle is never
  *   overwritten because the flip happens solely inside this first-insert transaction.
  *
- * Insert-repair semantics: an existing assistant (either locale name) is never
- * rewritten — the user may have edited the prompt. Only a missing MCP binding is
- * back-filled. Changing TIA_ASSISTANT_PROMPT bumps `version` (hashObject) which
- * re-runs this seeder; a user-deleted assistant is treated as self-healing of the
- * factory assistant and will be re-created on such a re-run.
+ * Insert-repair semantics: an existing assistant (either locale name) has its
+ * prompt hot-updated ONLY when the stored prompt is still a previously shipped
+ * factory text (byte-exact match against TIA_ASSISTANT_PROMPT_HISTORY) — such a
+ * row was never user-edited. A customized prompt matches no factory version and
+ * is never rewritten. Only a missing MCP binding is back-filled. Changing
+ * TIA_ASSISTANT_PROMPT bumps `version` (hashObject) which re-runs this seeder
+ * and drives the hot-update; a user-deleted assistant is treated as self-healing
+ * of the factory assistant and will be re-created on such a re-run.
  */
 export class TiaAssistantSeeder implements ISeeder {
   readonly name = 'tiaAssistant'
@@ -62,6 +67,7 @@ export class TiaAssistantSeeder implements ISeeder {
       if (existing) {
         // Repair path: back-fill missing MCP bindings only; never touch user edits.
         this.ensureBindings(tx, existing.id as string, /* activateServers */ false)
+        this.hotUpdateFactoryPrompt(tx, existing.id as string, existing.prompt)
         return
       }
 
@@ -105,11 +111,31 @@ export class TiaAssistantSeeder implements ISeeder {
    */
   private findSeededAssistant(tx: DbOrTx) {
     return tx
-      .select({ id: assistantTable.id })
+      .select({ id: assistantTable.id, prompt: assistantTable.prompt })
       .from(assistantTable)
       .where(and(eq(assistantTable.id, TIA_ASSISTANT_ID), isNull(assistantTable.deletedAt)))
       .limit(1)
       .all()
+  }
+
+  /**
+   * Factory prompt hot-update: advance a stored prompt to the current shipped
+   * version only when it is still a previously shipped factory text (byte-exact
+   * match in TIA_ASSISTANT_PROMPT_HISTORY) — such a row was never user-edited.
+   * Called on every seeder re-run, which happens exactly when the factory seed
+   * (prompt included) changed.
+   */
+  private hotUpdateFactoryPrompt(tx: DbOrTx, assistantId: string, storedPrompt: string | null): void {
+    const current = storedPrompt ?? ''
+    if (!isOutdatedFactoryPrompt(current)) {
+      return
+    }
+    tx.update(assistantTable).set({ prompt: TIA_ASSISTANT_PROMPT }).where(eq(assistantTable.id, assistantId)).run()
+    logger.info('Hot-updated factory TIA assistant prompt to the shipped version', {
+      assistantId,
+      previousChars: current.length,
+      shippedChars: TIA_ASSISTANT_PROMPT.length
+    })
   }
 
   /**

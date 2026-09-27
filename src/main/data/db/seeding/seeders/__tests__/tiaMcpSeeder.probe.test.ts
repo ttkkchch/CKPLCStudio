@@ -79,7 +79,7 @@ describe('TiaMcpSeeder v3 (TIA Portal location probing)', () => {
     seeder.run(dbh.db)
 
     const [row] = await dbh.db.select().from(mcpServerTable).where(eq(mcpServerTable.name, TIA_MCP_SERVER_NAME))
-    expect(row.args).toEqual(['--tia-portal-location', D_V21, '--tia-major-version', '21'])
+    expect(row.args).toEqual(['--tia-portal-location', D_V21, '--tia-major-version', '21', '--with-ui'])
   })
 
   it('repairs an untouched builtin row that still points at the C:-drive default', async () => {
@@ -102,7 +102,7 @@ describe('TiaMcpSeeder v3 (TIA Portal location probing)', () => {
     seeder.run(dbh.db)
 
     const [row] = await dbh.db.select().from(mcpServerTable).where(eq(mcpServerTable.name, TIA_MCP_SERVER_NAME))
-    expect(row.args).toEqual(['--tia-portal-location', D_V21, '--tia-major-version', '21'])
+    expect(row.args).toEqual(['--tia-portal-location', D_V21, '--tia-major-version', '21', '--with-ui'])
   })
 
   it('keeps user-customized args untouched', async () => {

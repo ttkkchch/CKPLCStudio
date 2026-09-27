@@ -6711,7 +6711,7 @@
         "nowledge_mem": "Requires Nowledge Mem app running locally. Keeps AI chats, tools, notes, agents, and files in private memory on your computer. Download from https://mem.nowledge.co/",
         "python": "Execute Python code in a secure sandbox environment. Run Python with Pyodide, supporting most standard libraries and scientific computing packages",
         "sequentialthinking": "A MCP server implementation that provides tools for dynamic and reflective problem solving through structured thinking processes",
-        "tia_workspace": "TIA workspace file access and per-project session notes for the TIA Engineer assistant. Reads text files and lists directories inside a whitelisted root (TIA_EXTRA_ROOTS env, ';'-separated); notes are stored under Data/tia_workspace."
+        "tia_workspace": "TIA workspace file access and per-project session notes for the TIA Engineer assistant. Reads and writes text files and lists directories inside a whitelisted root (TIA_EXTRA_ROOTS env, ';'-separated); notes and snapshots are stored under Data/tia_workspace."
       },
       "command": "Command",
       "config_description": "Configure Model Context Protocol servers",

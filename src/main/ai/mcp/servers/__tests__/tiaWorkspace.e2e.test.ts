@@ -54,7 +54,10 @@ describe.skipIf(!available)('TiaWorkspace server e2e (real TIA exports)', () => 
     client = null
     vi.restoreAllMocks()
     vi.mocked(application.getPath).mockReset()
-    await fs.rm(tempRoot, { recursive: true, force: true })
+    // Remove only this file's mkdtemp dir: the unit-test file runs in a
+    // parallel fork sharing the same tempRoot, so rm'ing the root itself
+    // would delete the other file's dirs mid-test.
+    await fs.rm(notesDir, { recursive: true, force: true })
   })
 
   it('reads a real exported SCL source through the whitelist', async () => {

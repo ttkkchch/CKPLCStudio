@@ -46,17 +46,23 @@ describe('TiaWorkspace MCP server', () => {
     client = null
     vi.restoreAllMocks()
     vi.mocked(application.getPath).mockReset()
-    await fs.rm(tempRoot, { recursive: true, force: true })
+    // Remove only this file's mkdtemp dirs: the e2e file runs in a parallel
+    // fork sharing the same tempRoot, so rm'ing the root itself would delete
+    // the other file's dirs mid-test (intermittent "File not found").
+    await Promise.all([fs.rm(notesDir, { recursive: true, force: true }), fs.rm(tiaRoot, { recursive: true, force: true })])
   })
 
-  it('exposes exactly the four workspace tools', async () => {
+  it('exposes exactly the seven workspace tools', async () => {
     client = await startServer('F:\\TIA_Projects')
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'list_dir',
       'read_project_note',
+      'read_project_snapshot',
       'read_text_file',
-      'write_project_note'
+      'write_project_note',
+      'write_project_snapshot',
+      'write_text_file'
     ])
   })
 
@@ -76,6 +82,65 @@ describe('TiaWorkspace MCP server', () => {
     expect(paged).toContain('LINE 29')
     expect(paged).not.toContain('LINE 30\n')
     expect(paged).toContain('more lines not shown')
+  })
+
+  it('reports an empty file without printing a stray line number', async () => {
+    const file = path.join(tiaRoot, 'Empty.s7dcl')
+    await fs.writeFile(file, '', 'utf-8')
+
+    client = await startServer(tiaRoot)
+
+    const text = await callText(client, 'read_text_file', { path: file })
+    expect(text).toContain('(empty file)')
+    expect(text).not.toMatch(/^\s+1\t/m)
+  })
+
+  it('writes a new text file, refuses accidental overwrite, honors overwrite:true', async () => {
+    client = await startServer(tiaRoot)
+    const file = path.join(tiaRoot, '_export', 'FB_Motor.new.s7dcl')
+
+    const written = await callText(client, 'write_text_file', { path: file, content: 'NEW SOURCE V2' })
+    expect(written).toContain('已写入')
+    expect(await fs.readFile(file, 'utf-8')).toBe('NEW SOURCE V2')
+
+    // Default: refuse to clobber an existing file (diff artifacts must never
+    // overwrite user files by accident).
+    const refused = await callText(client, 'write_text_file', { path: file, content: 'CLOBBER' })
+    expect(refused).toContain('默认拒绝覆盖')
+    expect(await fs.readFile(file, 'utf-8')).toBe('NEW SOURCE V2')
+
+    const forced = await callText(client, 'write_text_file', { path: file, content: 'V3', overwrite: true })
+    expect(forced).toContain('覆盖已有文件')
+    expect(await fs.readFile(file, 'utf-8')).toBe('V3')
+  })
+
+  it('rejects write_text_file outside the whitelist and for reserved device names', async () => {
+    client = await startServer(tiaRoot)
+
+    const outside = await callText(client, 'write_text_file', {
+      path: path.join(tiaRoot, '..', 'evil.s7dcl'),
+      content: 'nope'
+    })
+    expect(outside).toContain('Access denied')
+
+    const reserved = await callText(client, 'write_text_file', {
+      path: path.join(tiaRoot, 'CON.s7dcl'),
+      content: 'nope'
+    })
+    expect(reserved).toContain('reserved Windows device name')
+  })
+
+  it('normalizes CRLF and strips a leading BOM so lines never carry stray control chars', async () => {
+    const file = path.join(tiaRoot, 'Crlf.s7dcl')
+    await fs.writeFile(file, '\uFEFFLINE A\r\nLINE B\r\nLINE C\r\nLINE D', 'utf-8')
+
+    client = await startServer(tiaRoot)
+
+    const text = await callText(client, 'read_text_file', { path: file })
+    expect(text).toContain('LINE A')
+    expect(text).toContain('LINE D')
+    expect(text).not.toContain('\r')
+    expect(text).not.toContain('\uFEFF')
   })
 
   it('rejects paths outside the whitelist (traversal and other drives)', async () => {
@@ -144,5 +209,40 @@ describe('TiaWorkspace MCP server', () => {
 
     const result = await callText(client, 'write_project_note', { project_name: '...', content: 'x' })
     expect(result).toContain('Error')
+  })
+
+  it('prefixes Windows reserved device names so the note is still creatable', async () => {
+    client = await startServer()
+
+    const written = await callText(client, 'write_project_note', { project_name: 'CON', content: 'x' })
+    expect(written).toContain('已保存工程笔记')
+
+    const entries = await fs.readdir(notesDir)
+    expect(entries).toEqual(['_CON.md'])
+  })
+
+  it('writes and reads per-project snapshots as a separate file from notes', async () => {
+    client = await startServer()
+
+    const missing = await callText(client, 'read_project_snapshot', { project_name: 'ArWtPLC' })
+    expect(missing).toContain('暂无上下文快照')
+
+    const written = await callText(client, 'write_project_snapshot', {
+      project_name: 'ArWtPLC',
+      content: '# ArWtPLC 快照\n\n- PLC_2 / S7-1500'
+    })
+    expect(written).toContain('已保存工程上下文快照')
+
+    const read = await callText(client, 'read_project_snapshot', { project_name: 'ArWtPLC' })
+    expect(read).toContain('Snapshot:')
+    expect(read).toContain('S7-1500')
+
+    // Snapshot and note are distinct files sharing one sanitizer.
+    const entries = await fs.readdir(notesDir)
+    expect(entries.sort()).toEqual(['ArWtPLC.snapshot.md'])
+
+    const note = await callText(client, 'write_project_note', { project_name: 'ArWtPLC', content: 'note body' })
+    expect(note).toContain('已保存工程笔记')
+    expect((await fs.readdir(notesDir)).sort()).toEqual(['ArWtPLC.md', 'ArWtPLC.snapshot.md'])
   })
 })

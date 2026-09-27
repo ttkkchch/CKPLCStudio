@@ -4,6 +4,7 @@ import { mcpServerTable } from '@data/db/schemas/mcpServer'
 import { userModelTable } from '@data/db/schemas/userModel'
 import { userProviderTable } from '@data/db/schemas/userProvider'
 import { TiaAssistantSeeder } from '@data/db/seeding/seeders/tiaAssistantSeeder'
+import { TIA_ASSISTANT_PROMPT_HISTORY } from '../tiaAssistantPromptHistory'
 import { resolveBundledMcpCommand } from '@main/utils/bundledMcpCommand'
 import { TIA_MCP_COMMAND, TIA_MCP_SERVER_NAME } from '../tiaMcpSeeder'
 import {
@@ -149,6 +150,32 @@ describe('TiaAssistantSeeder', () => {
     // Repair path must not flip the user's own server toggle.
     const [server] = await dbh.db.select().from(mcpServerTable).where(eq(mcpServerTable.name, TIA_MCP_SERVER_NAME))
     expect(server.isActive).toBe(false)
+  })
+
+  it('hot-updates a stored factory prompt to the shipped version and stays idempotent', async () => {
+    await seedMcpServer()
+    // A row still holding the previously shipped factory text was never
+    // user-edited, so a seeder re-run (version bump) advances it.
+    await dbh.db.insert(assistantTable).values({
+      id: TIA_ASSISTANT_ID,
+      name: TIA_ASSISTANT_NAME_ZH,
+      emoji: TIA_ASSISTANT_EMOJI,
+      prompt: TIA_ASSISTANT_PROMPT_HISTORY[0],
+      description: TIA_ASSISTANT_DESCRIPTION,
+      modelId: TIA_MODEL_ID,
+      settings: DEFAULT_ASSISTANT_SETTINGS,
+      orderKey: 'Zz'
+    })
+
+    new TiaAssistantSeeder().run(dbh.db)
+
+    const [assistant] = await dbh.db.select().from(assistantTable).where(eq(assistantTable.id, TIA_ASSISTANT_ID))
+    expect(assistant.prompt).toBe(TIA_ASSISTANT_PROMPT)
+
+    // Re-running with the prompt already shipped must not touch the row again.
+    new TiaAssistantSeeder().run(dbh.db)
+    const [after] = await dbh.db.select().from(assistantTable).where(eq(assistantTable.id, TIA_ASSISTANT_ID))
+    expect(after.prompt).toBe(TIA_ASSISTANT_PROMPT)
   })
 
   it('still seeds the assistant when the TIA MCP server row is absent', async () => {
