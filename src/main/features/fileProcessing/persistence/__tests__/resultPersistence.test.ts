@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -137,8 +138,12 @@ describe('fileProcessing result persistence utils', () => {
     ).resolves.toEqual(new Uint8Array(Buffer.from('# output')))
 
     expect(mkdirSpy).toHaveBeenCalledWith('/tmp/file-processing', { recursive: true })
-    expect(mkdtempSpy).toHaveBeenCalledWith('/tmp/file-processing/file-processing-result-')
-    expect(createWriteStreamMock).toHaveBeenCalledWith('/tmp/file-processing/file-processing-result-abc/result.zip')
+    // Product builds both paths with path.join — mirror it so the expectations
+    // hold on both posix and win32 separators.
+    expect(mkdtempSpy).toHaveBeenCalledWith(path.join('/tmp/file-processing', 'file-processing-result-'))
+    expect(createWriteStreamMock).toHaveBeenCalledWith(
+      path.join('/tmp/file-processing/file-processing-result-abc', 'result.zip')
+    )
     expect(pipelineMock).toHaveBeenCalled()
     expect(rmSpy).toHaveBeenCalledWith('/tmp/file-processing/file-processing-result-abc', {
       recursive: true,

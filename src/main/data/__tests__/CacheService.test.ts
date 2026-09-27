@@ -9,6 +9,8 @@
  *  - Re-entrance, error isolation, Set-iteration safety
  *  - Lifecycle cleanup on onStop
  */
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { IpcChannel } from '@shared/IpcChannel'
 import type { IpcMainEvent } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -67,13 +69,17 @@ const SHARED_TEMPLATE = 'web_search.provider.last_used_key.${providerId}' as con
 
 // Sender shapes for the in-handler source-trust gate (validateSender); the
 // global application mock resolves getPath('app.root') to '/mock/app.root'.
+// validateSender round-trips the frame url through fileURLToPath and compares it
+// against the app root with path.relative — build the url via pathToFileURL so
+// it stays trusted on both posix and win32.
+const appRendererUrl = pathToFileURL(join('/mock/app.root', 'index.html')).href
 const trustedEvent = {
   sender: { getType: () => 'window' },
-  senderFrame: { url: 'file:///mock/app.root/index.html', parent: null }
+  senderFrame: { url: appRendererUrl, parent: null }
 } as unknown as IpcMainEvent
 const untrustedEvent = {
   sender: { getType: () => 'webview' },
-  senderFrame: { url: 'file:///mock/app.root/index.html', parent: null }
+  senderFrame: { url: appRendererUrl, parent: null }
 } as unknown as IpcMainEvent
 
 describe('CacheService subscription', () => {

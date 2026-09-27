@@ -1,3 +1,6 @@
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
 import { application } from '@application'
 import { WindowType } from '@main/core/window/types'
 import { dialog } from 'electron'
@@ -76,7 +79,11 @@ describe('PrintService', () => {
       sourcePath: '/Users/me/Notes/safe.md'
     })
 
-    expect(html).toContain('<base href="file:///Users/me/Notes/" />')
+    // Mirror the product's getBaseTag construction (pathToFileURL of dirname +
+    // path.sep) so the expectation holds on every platform.
+    expect(html).toContain(
+      `<base href="${pathToFileURL(path.dirname('/Users/me/Notes/safe.md') + path.sep).toString()}" />`
+    )
     expect(html).toContain('&lt;Unsafe&gt;')
     expect(html).toContain('<h1>Safe</h1>')
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')

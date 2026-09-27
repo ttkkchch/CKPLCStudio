@@ -1,12 +1,19 @@
+import path from 'node:path'
+
 import { createMockApplication } from '@test-mocks/main/application'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The in-memory filesystem exercises the reset marker protocol without disk I/O.
 
 const USER_DATA = '/mock/home/appdata/CherryStudio'
+// The platform-joined spelling of USER_DATA — path.join normalizes separators,
+// so rmSync targets built by the product start with this prefix + path.sep.
+const USER_DATA_JOINED = path.join(USER_DATA)
 const APP_TEMP = '/mock/tmp/CherryStudio'
-const MARKER_FILE = `${USER_DATA}/data-reset.pending.json`
-const MARKER_ASIDE = `${USER_DATA}/data-reset.pending.invalid`
+// Built with path.join so expectations match the production path construction
+// (dataReset.ts joins/normalizes userData-derived paths) on any platform.
+const MARKER_FILE = path.join(USER_DATA, 'data-reset.pending.json')
+const MARKER_ASIDE = path.join(USER_DATA, 'data-reset.pending.invalid')
 
 let applicationMock: ReturnType<typeof createMockApplication>
 const showErrorBoxMock = vi.fn()
@@ -156,7 +163,7 @@ function stubApplication(userData: string = USER_DATA, opts: { throwOnUserData?:
       return userData
     }
     if (key === 'app.temp') return APP_TEMP
-    if (key === 'feature.data_reset.marker_file') return `${userData}/data-reset.pending.json`
+    if (key === 'feature.data_reset.marker_file') return path.join(userData, 'data-reset.pending.json')
     return '/mock/unknown'
   })
   vi.doMock('@application', () => ({ application: applicationMock }))
@@ -311,7 +318,9 @@ function pendingMarker(overrides: Partial<PendingMarker> = {}): PendingMarker {
     version: 1,
     status: 'pending',
     requestedAt: '2026-07-20T00:00:00.000Z',
-    canonicalPath: USER_DATA,
+    // dataReset.canonicalize() resolves the userData path before storing it; the
+    // test's identity realpath mock makes the canonical form path.resolve(USER_DATA).
+    canonicalPath: path.resolve(USER_DATA),
     ...overrides
   }
 }
@@ -335,7 +344,7 @@ async function requestReset() {
 }
 
 function wipedEntries(): string[] {
-  return rmSyncMock.mock.calls.map(([target]) => String(target)).filter((t) => t.startsWith(`${USER_DATA}/`))
+  return rmSyncMock.mock.calls.map(([target]) => String(target)).filter((t) => t.startsWith(USER_DATA_JOINED + path.sep))
 }
 
 beforeEach(() => {
@@ -368,10 +377,10 @@ describe('runDataReset', () => {
 
     const wiped = wipedEntries()
     for (const entry of EXPECTED_WIPED) {
-      expect(wiped).toContain(`${USER_DATA}/${entry}`)
+      expect(wiped).toContain(path.join(USER_DATA, entry))
     }
     for (const entry of EXPECTED_KEPT) {
-      expect(wiped).not.toContain(`${USER_DATA}/${entry}`)
+      expect(wiped).not.toContain(path.join(USER_DATA, entry))
     }
     expect(rmSyncMock).toHaveBeenCalledWith(APP_TEMP, expect.anything())
 
@@ -516,7 +525,7 @@ describe('runDataReset', () => {
   it('relaunches back into preboot when a pass fails with attempts left', async () => {
     stubAll(pendingMarker())
     rmSyncMock.mockImplementation((target: string) => {
-      if (String(target).endsWith('/Data')) throw new Error('EBUSY: resource busy')
+      if (String(target).endsWith(`${path.sep}Data`)) throw new Error('EBUSY: resource busy')
     })
     await runReset()
 
@@ -529,7 +538,7 @@ describe('runDataReset', () => {
   it('gives up at the attempt cap: clears the marker, warns, continues boot', async () => {
     stubAll(pendingMarker({ attempts: 1 }))
     rmSyncMock.mockImplementation((target: string) => {
-      if (String(target).endsWith('/Data')) throw new Error('EBUSY: resource busy')
+      if (String(target).endsWith(`${path.sep}Data`)) throw new Error('EBUSY: resource busy')
     })
     await runReset()
 
@@ -674,7 +683,7 @@ describe('runDataReset', () => {
     await runReset()
 
     for (const [target] of rmSyncMock.mock.calls) {
-      expect(String(target).startsWith(`${USER_DATA}/`) || String(target) === APP_TEMP).toBe(true)
+      expect(String(target).startsWith(USER_DATA_JOINED + path.sep) || String(target) === APP_TEMP).toBe(true)
     }
   })
 
@@ -746,7 +755,7 @@ describe('requestDataReset', () => {
       expect.objectContaining({
         version: 1,
         status: 'pending',
-        canonicalPath: USER_DATA
+        canonicalPath: path.resolve(USER_DATA)
       })
     )
     expect(fsCtl.commits[0]).not.toHaveProperty('userDataPath')

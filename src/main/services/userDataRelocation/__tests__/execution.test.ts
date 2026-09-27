@@ -356,6 +356,9 @@ describe('userDataRelocation execution', () => {
   })
 
   it('resolves a relative directory link before creating a Windows junction', async () => {
+    // Creating the source's relative dir link requires symlink privileges that
+    // default Windows accounts lack (EPERM), same as the guard above.
+    if (process.platform === 'win32') return
     const root = makeRoot()
     const source = path.join(root, 'source')
     const target = path.join(root, 'target')

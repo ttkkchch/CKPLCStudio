@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { DefaultBootConfig } from '@shared/data/bootConfig/bootConfigSchemas'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,7 +12,9 @@ vi.mock('node:fs', async () => {
 const mockFs = vi.mocked(fs)
 const mockRenameSync = mockFs.renameSync
 
-const CONFIG_PATH = '/mock/home/.cherrystudio/boot-config.json'
+// Built with path.join so the expectation matches the production path construction
+// (BOOT_CONFIG_PATH = path.join(CHERRY_HOME, 'boot-config.json')) on any platform.
+const CONFIG_PATH = path.join('/mock/home', '.plcstudio', 'boot-config.json')
 const TEMP_PATH = `${CONFIG_PATH}.tmp`
 
 async function createService() {

@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import type * as FsUtils from '@main/utils/file'
 import type { KnowledgeItemOf } from '@shared/data/types/knowledge'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -32,7 +34,16 @@ vi.mock('@logger', () => ({
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
-  return mockApplicationFactory()
+  const mod = mockApplicationFactory()
+  // '/mock/…' has no drive letter, so it is not an absolute path on win32 once
+  // the product joins it (AbsoluteFilePathSchema rejects it) — resolve it the
+  // same way production roots are resolved.
+  const knowledgeDataDir = path.resolve('/mock', 'feature.knowledgebase.data')
+  mod.application.getPath.mockImplementation((key: string, filename?: string) => {
+    const base = key === 'feature.knowledgebase.data' ? knowledgeDataDir : `/mock/${key}`
+    return filename ? path.join(base, filename) : base
+  })
+  return mod
 })
 
 vi.mock('electron', () => ({
@@ -109,6 +120,11 @@ vi.mock('@main/utils/file', async (importOriginal) => ({
 }))
 
 const { loadKnowledgeItemDocuments } = await import('../KnowledgeReader')
+
+// Mirrors the material root the '@application' mock yields for 'base-1'
+// (resolved → valid absolute path on win32 too).
+const KNOWLEDGE_DATA_DIR = path.resolve('/mock', 'feature.knowledgebase.data')
+const BASE1_RAW_DIR = path.join(KNOWLEDGE_DATA_DIR, 'base-1', 'raw')
 
 function createFileItem(ext: string, sourcePath?: string): KnowledgeItemOf<'file'> {
   return {
@@ -200,7 +216,7 @@ describe('loadKnowledgeItemDocuments', () => {
     const docs = await loadKnowledgeItemDocuments(item)
 
     expect(readerSpies[expectedReader as keyof typeof readerSpies]).toHaveBeenCalledWith(
-      `/mock/feature.knowledgebase.data/base-1/raw/sample${ext}`
+      path.join(BASE1_RAW_DIR, `sample${ext}`)
     )
     expect(docs[0]).toMatchObject({
       metadata: {
@@ -213,7 +229,7 @@ describe('loadKnowledgeItemDocuments', () => {
     const item = createFileItem('.log')
     const docs = await loadKnowledgeItemDocuments(item)
 
-    expect(readerSpies.text).toHaveBeenCalledWith('/mock/feature.knowledgebase.data/base-1/raw/sample.log')
+    expect(readerSpies.text).toHaveBeenCalledWith(path.join(BASE1_RAW_DIR, 'sample.log'))
     expect(docs[0]).toMatchObject({
       metadata: {
         source: '/tmp/sample.log'
@@ -233,7 +249,7 @@ describe('loadKnowledgeItemDocuments', () => {
 
     const docs = await loadKnowledgeItemDocuments(item)
 
-    expect(readerSpies.markdown).toHaveBeenCalledWith('/mock/feature.knowledgebase.data/base-1/raw/source.md')
+    expect(readerSpies.markdown).toHaveBeenCalledWith(path.join(BASE1_RAW_DIR, 'source.md'))
     expect(docs[0]).toMatchObject({
       metadata: {
         source: '/tmp/source.pdf'
@@ -246,7 +262,7 @@ describe('loadKnowledgeItemDocuments', () => {
 
     const docs = await loadKnowledgeItemDocuments(item)
 
-    expect(customReaderSpies.doc).toHaveBeenCalledWith('/mock/feature.knowledgebase.data/base-1/raw/sample.doc')
+    expect(customReaderSpies.doc).toHaveBeenCalledWith(path.join(BASE1_RAW_DIR, 'sample.doc'))
     expect(docs[0]).toMatchObject({
       metadata: {
         source: '/tmp/sample.doc'
@@ -259,9 +275,7 @@ describe('loadKnowledgeItemDocuments', () => {
 
     const docs = await loadKnowledgeItemDocuments(item)
 
-    expect(customReaderSpies.drafts).toHaveBeenCalledWith(
-      '/mock/feature.knowledgebase.data/base-1/raw/sample.draftsexport'
-    )
+    expect(customReaderSpies.drafts).toHaveBeenCalledWith(path.join(BASE1_RAW_DIR, 'sample.draftsexport'))
     expect(docs[0]).toMatchObject({
       metadata: {
         source: '/tmp/sample.draftsexport'
@@ -274,7 +288,7 @@ describe('loadKnowledgeItemDocuments', () => {
 
     const docs = await loadKnowledgeItemDocuments(item)
 
-    expect(customReaderSpies.epub).toHaveBeenCalledWith('/mock/feature.knowledgebase.data/base-1/raw/sample.epub')
+    expect(customReaderSpies.epub).toHaveBeenCalledWith(path.join(BASE1_RAW_DIR, 'sample.epub'))
     expect(docs[0]).toMatchObject({
       metadata: {
         source: '/tmp/sample.epub'
@@ -287,7 +301,7 @@ describe('loadKnowledgeItemDocuments', () => {
     const item = createNoteItem('hello world', 'my-note.md')
     const docs = await loadKnowledgeItemDocuments(item)
 
-    expect(readFileMock).toHaveBeenCalledWith('/mock/feature.knowledgebase.data/base-1/raw/my-note.md')
+    expect(readFileMock).toHaveBeenCalledWith(path.join(BASE1_RAW_DIR, 'my-note.md'))
     expect(docs).toHaveLength(1)
     expect(docs[0]).toMatchObject({
       text: 'hello world',
@@ -306,7 +320,7 @@ describe('loadKnowledgeItemDocuments', () => {
 
     // The reader never fetches; the indexing job's ensure-snapshot step does.
     expect(fetchMock).not.toHaveBeenCalled()
-    expect(readFileMock).toHaveBeenCalledWith('/mock/feature.knowledgebase.data/base-1/raw/example-page.md')
+    expect(readFileMock).toHaveBeenCalledWith(path.join(BASE1_RAW_DIR, 'example-page.md'))
     expect(docs).toHaveLength(1)
     expect(docs[0]).toMatchObject({
       text: '# Page\n\nbody\n',

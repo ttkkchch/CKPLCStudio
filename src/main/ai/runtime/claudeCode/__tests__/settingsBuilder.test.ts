@@ -297,12 +297,12 @@ describe('buildClaudeCodeSessionSettings', () => {
     expect(mocks.listSkills).toHaveBeenCalledWith({ agentId: 'agent-1' })
     expect(mocks.listLocalSkills).toHaveBeenCalledWith('/workspace/project')
     expect(settings.cwd).toBe('/workspace/project')
-    expect(settings.additionalDirectories).toEqual(['/app/feature.agents.data/agent-1'])
+    expect(settings.additionalDirectories).toEqual([path.join('/app/feature.agents.data', 'agent-1')])
     expect(mocks.buildPrompt).toHaveBeenCalledWith(
       '/workspace/project',
       expect.anything(),
       true,
-      '/app/feature.agents.data/agent-1'
+      path.join('/app/feature.agents.data', 'agent-1')
     )
     expect(settings.systemPrompt as string).toContain('"/workspace/project"')
     expect(settings.settings).toMatchObject({ autoCompactEnabled: true })
@@ -1521,20 +1521,19 @@ describe('buildClaudeCodeSessionSettings', () => {
 
       expect(settings.env).not.toHaveProperty('ANTHROPIC_API_KEY')
       // application.getPath('sys.home') is mocked to '/app/sys.home'.
-      expect(settings.env!.CLAUDE_CONFIG_DIR).toBe('/app/sys.home/.claude')
+      expect(settings.env!.CLAUDE_CONFIG_DIR).toBe(path.join('/app/sys.home', '.claude'))
     })
 
     it('falls back CLAUDE_CONFIG_DIR to ~/.claude when the shell exports it empty', async () => {
       // An empty CLAUDE_CONFIG_DIR must not pass through (it would point the SDK at /.credentials.json);
       // the fallback uses || so it matches CodeCliService's login probe rather than diverging from it.
       mocks.getShellEnv.mockResolvedValue({ CLAUDE_CONFIG_DIR: '' })
-
       const settings = await buildClaudeCodeSessionSettings(
         session as never,
         { id: 'claude-code', authMethods: ['external-cli'] } as never
       )
 
-      expect(settings.env!.CLAUDE_CONFIG_DIR).toBe('/app/sys.home/.claude')
+      expect(settings.env!.CLAUDE_CONFIG_DIR).toBe(path.join('/app/sys.home', '.claude'))
     })
 
     it('leaves CLAUDE_CONFIG_DIR unset on macOS so the Agent SDK can read the Keychain login', async () => {

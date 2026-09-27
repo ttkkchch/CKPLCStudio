@@ -83,7 +83,7 @@ describe('API gateway routes (integration)', () => {
     it('GET / → 200 API info', async () => {
       const { status, body } = await read(await get(app, '/', {}))
       expect(status).toBe(200)
-      expect(body.name).toBe('Cherry Studio API')
+      expect(body.name).toBe('CKPLCStudio API')
       expect(body.endpoints).toBeDefined()
     })
   })

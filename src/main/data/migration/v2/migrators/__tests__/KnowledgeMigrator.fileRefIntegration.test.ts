@@ -20,6 +20,7 @@ import { KNOWLEDGE_BASE_ERROR_MISSING_EMBEDDING_MODEL } from '@shared/data/types
 import type { FileMetadata } from '@shared/data/types/legacyFile'
 import { setupTestDatabase } from '@test-helpers/db'
 import { eq } from 'drizzle-orm'
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AssistantMigrator } from '../AssistantMigrator'
@@ -57,7 +58,9 @@ function dexieFileRow(overrides: Partial<FileMetadata> & Pick<FileMetadata, 'id'
     // Unique per file so migrated relativePaths (now derived from origin_name)
     // stay distinct and need no dedup suffix.
     origin_name: overrides.origin_name ?? `${overrides.id}.pdf`,
-    path: overrides.path ?? `${MOCK_USER_DATA}/Data/Files/${overrides.id}.pdf`,
+    // Built with path.join to mirror FileMigrator's internal-prefix check
+    // (path.join(userData, 'Data', 'Files')) on any platform.
+    path: overrides.path ?? path.join(MOCK_USER_DATA, 'Data', 'Files', `${overrides.id}.pdf`),
     size: overrides.size ?? 1024,
     ext: overrides.ext ?? '.pdf',
     type: overrides.type ?? 'document',
@@ -330,13 +333,15 @@ describe('KnowledgeMigrator reference integrity guards (integration)', () => {
       .select({ id: knowledgeItemTable.id, data: knowledgeItemTable.data })
       .from(knowledgeItemTable)
     expect(knowledgeItemRows).toHaveLength(2)
+    // data.source is the v1 row's `path` column verbatim (KnowledgeMappings), so
+    // expect the same path.join construction the fixture uses.
     expect(knowledgeItemRows.map((row) => row.data).sort((a, b) => a.source.localeCompare(b.source))).toEqual([
       {
-        source: `${MOCK_USER_DATA}/Data/Files/${FILE_SURVIVOR_ID}.pdf`,
+        source: path.join(MOCK_USER_DATA, 'Data', 'Files', `${FILE_SURVIVOR_ID}.pdf`),
         relativePath: `${FILE_SURVIVOR_ID}.pdf`
       },
       {
-        source: `${MOCK_USER_DATA}/Data/Files/${FILE_SKIPPED_ID}.pdf`,
+        source: path.join(MOCK_USER_DATA, 'Data', 'Files', `${FILE_SKIPPED_ID}.pdf`),
         relativePath: `${FILE_SKIPPED_ID}.pdf`
       }
     ])
@@ -389,7 +394,7 @@ describe('KnowledgeMigrator reference integrity guards (integration)', () => {
     const itemRows = await dbh.db.select({ data: knowledgeItemTable.data }).from(knowledgeItemTable)
     expect(itemRows).toHaveLength(FILE_COUNT)
     expect(itemRows[0]?.data).toEqual({
-      source: `${MOCK_USER_DATA}/Data/Files/${fileEntryIdAt(1000)}.pdf`,
+      source: path.join(MOCK_USER_DATA, 'Data', 'Files', `${fileEntryIdAt(1000)}.pdf`),
       relativePath: `${fileEntryIdAt(1000)}.pdf`
     })
 

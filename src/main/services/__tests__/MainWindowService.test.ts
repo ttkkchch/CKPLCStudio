@@ -110,6 +110,9 @@ vi.mock('@main/core/lifecycle', async () => {
   return { ...actual, BaseService: StubBase }
 })
 
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
 import { WindowType } from '@main/core/window/types'
 import { app } from 'electron'
 
@@ -602,8 +605,10 @@ describe('MainWindowService', () => {
     it('allows navigation to a packaged renderer page when no dev server is configured', () => {
       vi.stubEnv('ELECTRON_RENDERER_URL', undefined)
 
+      // Build a well-formed file URL (drive-less `file:///...` strings are
+      // invalid on win32) whose path sits inside the mocked app root.
       expect(
-        navigateTo(`file://${APP_ROOT}/out/renderer/windows/main/index.html`).preventDefault
+        navigateTo(pathToFileURL(path.join(APP_ROOT, 'out/renderer/windows/main/index.html')).href).preventDefault
       ).not.toHaveBeenCalled()
     })
 

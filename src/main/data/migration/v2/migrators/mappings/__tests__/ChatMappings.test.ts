@@ -1,4 +1,5 @@
 import type * as FsPromises from 'node:fs/promises'
+import path from 'node:path'
 
 import { fileEntryTable } from '@data/db/schemas/file'
 import type {
@@ -48,7 +49,10 @@ import {
   transformMessage
 } from '../ChatMappings'
 
-const MIGRATION_FILES_DIR = '/mock/migration-userdata/Data/Files'
+// Resolved per the RUNNING platform so path.join(MIGRATION_FILES_DIR, …) is an
+// absolute filesystem path everywhere (AbsoluteFilePathSchema rejects a
+// win32-joined '\mock\…' shape, but accepts a drive-letter one).
+const MIGRATION_FILES_DIR = path.resolve('/mock/migration-userdata', 'Data', 'Files')
 
 /** Helper: create a minimal OldMessage stub */
 function msg(id: string, role: 'user' | 'assistant' = 'assistant', extra: Partial<OldMessage> = {}): OldMessage {
@@ -552,7 +556,10 @@ describe('transformBlocksToParts', () => {
 
       expect(parts).toHaveLength(1)
       const part = parts[0] as FileUIPart
-      expect(part.url).toMatch(/^file:\/\/\/mock\/migration-userdata\/Data\/Files\/.+\.png$/)
+      // url is `file://` + the physical path built with path.join → assert
+      // against the same platform-consistent construction.
+      expect(part.url.startsWith(`file://${MIGRATION_FILES_DIR}`)).toBe(true)
+      expect(part.url.endsWith('.png')).toBe(true)
       expect(part.mediaType).toBe('image/png')
       const fileEntryId = readCherryMeta(part)?.fileEntryId
       expect(fileEntryId).toBeTruthy()

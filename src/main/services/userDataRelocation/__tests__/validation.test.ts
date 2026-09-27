@@ -162,6 +162,9 @@ describe('userDataRelocation validation', () => {
   })
 
   it('allows an app-specific directory below the Linux config root while protecting the root', async () => {
+    // Linux-only semantics: the protected root is the literal /tmp, whose parent
+    // does not exist on Windows hosts (mkdtemp does not create parents).
+    if (process.platform === 'win32') return
     const root = fs.mkdtempSync(path.join('/tmp', 'cherry-relocation-linux-'))
     roots.push(root)
     const source = path.join(root, 'source')
@@ -272,6 +275,9 @@ describe('userDataRelocation validation', () => {
   })
 
   it('allows writable descendants of protected Linux top-level directories but not the directories themselves', async () => {
+    // Linux-only semantics: the fs mock keys on POSIX-style absolute paths, which
+    // the host-native path handling on win32 would not reproduce.
+    if (process.platform === 'win32') return
     vi.resetModules()
     const entries: string[] = []
     const existing = new Set(['/home/alice/cherry', '/var', '/var/cherry', '/', String(relocationState.installPath)])

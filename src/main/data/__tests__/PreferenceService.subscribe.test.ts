@@ -7,6 +7,8 @@
  * never receive a push), and must register all requested keys for a
  * resolvable window.
  */
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { IpcChannel } from '@shared/IpcChannel'
 import type { IpcMainInvokeEvent } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -31,13 +33,17 @@ vi.mock('@application', async () => {
 })
 
 // Sender shapes for the in-handler source-trust gate (validateSender).
+// validateSender round-trips the frame url through fileURLToPath and compares it
+// against the app root with path.relative — build the url via pathToFileURL so
+// it stays trusted on both posix and win32.
+const appRendererUrl = pathToFileURL(join('/mock/app.root', 'index.html')).href
 const trustedEvent = {
   sender: { getType: () => 'window' },
-  senderFrame: { url: 'file:///mock/app.root/index.html', parent: null }
+  senderFrame: { url: appRendererUrl, parent: null }
 } as unknown as IpcMainInvokeEvent
 const untrustedEvent = {
   sender: { getType: () => 'webview' },
-  senderFrame: { url: 'file:///mock/app.root/index.html', parent: null }
+  senderFrame: { url: appRendererUrl, parent: null }
 } as unknown as IpcMainInvokeEvent
 
 // Mock lifecycle decorators so `new PreferenceService()` works without the container.

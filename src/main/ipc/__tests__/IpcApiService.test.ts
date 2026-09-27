@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { BaseService, Phase } from '@main/core/lifecycle'
 import { getPhase } from '@main/core/lifecycle/decorators'
 import { IpcError } from '@shared/ipc/errors/IpcError'
@@ -32,9 +34,11 @@ function registeredHandler() {
   return call?.[1] as (event: unknown, route: string, input: unknown, meta?: unknown) => Promise<unknown>
 }
 
+// The url is built via pathToFileURL so validateSender's fileURLToPath round-trip
+// against getPath('app.root') ('/app') stays trusted on both posix and win32.
 const trustedEvent = {
   sender: { getType: () => 'window' },
-  senderFrame: { url: 'file:///app/index.html', parent: null }
+  senderFrame: { url: pathToFileURL(join('/app', 'index.html')).href, parent: null }
 }
 const webviewEvent = {
   sender: { getType: () => 'webview' },

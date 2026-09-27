@@ -384,9 +384,14 @@ describe('SkillService', () => {
         '# Large skill'
       )
       expect((await fs.promises.lstat(path.join(dataSkillsRoot, 'large-skill'))).isSymbolicLink()).toBe(false)
-      expect(await fs.promises.realpath(path.join(mirrorRoot, 'large-skill'))).toBe(
-        await fs.promises.realpath(path.join(dataSkillsRoot, 'large-skill'))
-      )
+      // On Windows the mirror is a verified copy, not a symlink, so realpaths differ.
+      if (process.platform !== 'win32') {
+        expect(await fs.promises.realpath(path.join(mirrorRoot, 'large-skill'))).toBe(
+          await fs.promises.realpath(path.join(dataSkillsRoot, 'large-skill'))
+        )
+      } else {
+        await expect(fs.promises.access(path.join(mirrorRoot, 'large-skill', 'SKILL.md'))).resolves.toBeUndefined()
+      }
       expect(skillService.getInstalledSkillDirectory(result)).toBe(path.join(dataSkillsRoot, 'large-skill'))
       expect(await dbh.db.select().from(agentSkillTable)).toEqual([])
     })
@@ -608,13 +613,13 @@ describe('SkillService', () => {
 
         expect(result).toBe(installedSkill)
         expect(net.fetch).toHaveBeenNthCalledWith(1, 'https://clawhub.ai/api/v1/skills/code?ownerHandle=ivangdavila', {
-          headers: { 'User-Agent': 'CherryStudio' }
+          headers: { 'User-Agent': 'CKPLCStudio' }
         })
         expect(net.fetch).toHaveBeenNthCalledWith(
           2,
           'https://clawhub.ai/api/v1/download?slug=code&ownerHandle=ivangdavila',
           {
-            headers: { 'User-Agent': 'CherryStudio' }
+            headers: { 'User-Agent': 'CKPLCStudio' }
           }
         )
         expect(createTempDirSpy).toHaveBeenCalledWith('clawhub')
@@ -639,11 +644,14 @@ describe('SkillService', () => {
       const skillService = new SkillService()
       const root = await createTempDir('skill-zip-install-')
       const realZipPath = path.join(root, 'source.zip')
-      const linkedZipPath = path.join(root, 'linked.zip')
+      // Junction to the parent directory provides a non-canonical path spelling that resolves
+      // to the same file — works unprivileged on Windows, where file symlinks need rights.
+      const linkedRoot = path.join(root, 'linked-root')
+      const linkedZipPath = path.join(linkedRoot, 'source.zip')
       const extractDir = path.join(root, 'extract')
       const locatedSkillDir = path.join(extractDir, 'skill')
       await fs.promises.writeFile(realZipPath, new Uint8Array([1, 2, 3]))
-      await fs.promises.symlink(realZipPath, linkedZipPath)
+      await fs.promises.symlink(root, linkedRoot, 'junction')
       await fs.promises.mkdir(extractDir, { recursive: true })
       const canonicalZipPath = await fs.promises.realpath(realZipPath)
 
@@ -663,7 +671,7 @@ describe('SkillService', () => {
       const repoDir = await createTempDir('skill-repo-')
       const externalDir = await createTempDir('skill-external-')
       await fs.promises.writeFile(path.join(externalDir, 'SKILL.md'), '# external')
-      await fs.promises.symlink(externalDir, path.join(repoDir, 'linked'), 'dir')
+      await fs.promises.symlink(externalDir, path.join(repoDir, 'linked'), 'junction')
       vi.mocked(findSkillMdPath).mockResolvedValue(path.join(externalDir, 'SKILL.md'))
 
       await expect(skillService['resolveSkillDirectory'](repoDir, null, 'linked')).rejects.toThrow(
@@ -967,7 +975,10 @@ describe('SkillService', () => {
 
       await skillService.linkMirror('pdf')
       await expect(fs.promises.access(path.join(mirrorRoot, 'pdf', 'SKILL.md'))).resolves.toBeUndefined()
-      expect((await fs.promises.lstat(path.join(mirrorRoot, 'pdf'))).isSymbolicLink()).toBe(true)
+      // On Windows the mirror is a verified copy, not a symlink.
+      expect((await fs.promises.lstat(path.join(mirrorRoot, 'pdf'))).isSymbolicLink()).toBe(
+        process.platform !== 'win32'
+      )
 
       await skillService.unlinkMirror('pdf')
       await expect(fs.promises.access(path.join(mirrorRoot, 'pdf'))).rejects.toThrow()
@@ -975,14 +986,17 @@ describe('SkillService', () => {
 
     it('linkMirror replaces a broken mirror symlink', async () => {
       await writeLibrarySkill('pdf')
-      await fs.promises.symlink(path.join(dataSkillsRoot, 'missing'), path.join(mirrorRoot, 'pdf'), 'dir')
+      await fs.promises.symlink(path.join(dataSkillsRoot, 'missing'), path.join(mirrorRoot, 'pdf'), 'junction')
 
       await skillService.linkMirror('pdf')
 
       await expect(fs.promises.access(path.join(mirrorRoot, 'pdf', 'SKILL.md'))).resolves.toBeUndefined()
-      expect(await fs.promises.realpath(path.join(mirrorRoot, 'pdf'))).toBe(
-        await fs.promises.realpath(path.join(dataSkillsRoot, 'pdf'))
-      )
+      // On Windows the mirror is a verified copy, not a symlink, so realpaths differ.
+      if (process.platform !== 'win32') {
+        expect(await fs.promises.realpath(path.join(mirrorRoot, 'pdf'))).toBe(
+          await fs.promises.realpath(path.join(dataSkillsRoot, 'pdf'))
+        )
+      }
     })
 
     it('linkMirror removes a stale mirror when the library descriptor is missing', async () => {
@@ -1108,7 +1122,10 @@ describe('SkillService', () => {
       expect(rows[0]?.version).toBe('3.0.0')
       expect(rows[0]?.isEnabled).toBe(false)
       await expect(fs.promises.access(path.join(authored, 'SKILL.md'))).resolves.toBeUndefined()
-      expect((await fs.promises.lstat(path.join(mirrorRoot, 'new-skill'))).isSymbolicLink()).toBe(true)
+      // On Windows the mirror is a verified copy, not a symlink.
+      expect((await fs.promises.lstat(path.join(mirrorRoot, 'new-skill'))).isSymbolicLink()).toBe(
+        process.platform !== 'win32'
+      )
     })
 
     it('treats different local directories as different install origins', async () => {
@@ -1299,7 +1316,7 @@ describe('SkillService', () => {
       vi.mocked(parseSkillMetadata).mockReset()
       const external = await createTempDir('external-skill-')
       await fs.promises.writeFile(path.join(external, 'SKILL.md'), '# external')
-      await fs.promises.symlink(external, path.join(dataSkillsRoot, 'linked'), 'dir')
+      await fs.promises.symlink(external, path.join(dataSkillsRoot, 'linked'), 'junction')
       await dbh.db.insert(agentGlobalSkillTable).values({
         id: SKILL_ID_1,
         name: 'linked',

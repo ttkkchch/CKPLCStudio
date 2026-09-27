@@ -11,6 +11,7 @@ import {
   readFile,
   rm,
   symlink,
+  unlink,
   writeFile
 } from 'node:fs/promises'
 import { release, tmpdir } from 'node:os'
@@ -81,6 +82,29 @@ describe('saveMigrationDiagnosticBundle', () => {
 
   async function expectNoAtomicResidue() {
     expect((await readdir(workDir)).filter((name) => name.includes('.tmp-'))).toEqual([])
+  }
+
+  /**
+   * Creating symlinks on Windows requires admin or Developer-Mode privileges
+   * and fails with EPERM otherwise. Probe the current environment (workDir is
+   * per-test temp space; the probe files never match the log-discovery
+   * patterns) so the symlink-specific scenarios can be skipped where the OS
+   * cannot create one.
+   */
+  async function symlinkSupported(): Promise<boolean> {
+    const target = path.join(workDir, 'sl-probe-target')
+    const linkPath = path.join(workDir, 'sl-probe-link')
+    try {
+      await writeFile(target, 'probe')
+      await symlink(target, linkPath)
+      await unlink(linkPath)
+      return true
+    } catch {
+      return false
+    } finally {
+      await rm(linkPath, { force: true })
+      await rm(target, { force: true })
+    }
   }
 
   it('writes minimal system metadata without failure details', async () => {
@@ -176,7 +200,8 @@ describe('saveMigrationDiagnosticBundle', () => {
     await expectClosed(handles)
   })
 
-  it('rejects a matching symlink or changed inode before archiving', async () => {
+  it('rejects a matching symlink or changed inode before archiving', async (ctx) => {
+    if (!(await symlinkSupported())) ctx.skip()
     const other = path.join(logsDir, 'other.log')
     await writeFile(other, 'symlink target')
     await symlink(other, logPath())
@@ -362,7 +387,8 @@ describe('saveMigrationDiagnosticBundle', () => {
     await expectMetadataOnly(target)
   })
 
-  it('fails closed when the destination identity cannot be verified', async () => {
+  it('fails closed when the destination identity cannot be verified', async (ctx) => {
+    if (!(await symlinkSupported())) ctx.skip()
     await writeFile(logPath(), 'log')
     const target = destination()
     await symlink(target, target)

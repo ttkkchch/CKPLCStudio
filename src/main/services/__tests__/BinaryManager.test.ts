@@ -1,6 +1,8 @@
 import type * as LifecycleModule from '@main/core/lifecycle'
 import { getPhase } from '@main/core/lifecycle/decorators'
 import { Phase } from '@main/core/lifecycle/types'
+import path from 'node:path'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { manifestRef, mockExecFileAsync, mockFs, mockFsp, mockPreferenceService, platformMock } = vi.hoisted(() => ({
@@ -142,8 +144,8 @@ describe('binary execution env split', () => {
 
   it('getBinaryIsolatedHomeEnv relocates HOME/XDG into the data dir', () => {
     const env = getBinaryIsolatedHomeEnv()
-    expect(env['HOME']).toBe('/mock/feature.binary.data/home')
-    expect(env['XDG_CONFIG_HOME']).toBe('/mock/feature.binary.data/xdg/config')
+    expect(env['HOME']).toBe(path.join('/mock/feature.binary.data', 'home'))
+    expect(env['XDG_CONFIG_HOME']).toBe(path.join('/mock/feature.binary.data', 'xdg', 'config'))
   })
 })
 
@@ -415,13 +417,13 @@ describe('BinaryManager', () => {
       })
       ;(mockFs.existsSync as any).mockImplementation((candidate: string) =>
         [
-          '/mock/feature.binary.data/shims/myfd',
-          '/mock/feature.binary.data/shims/node',
-          '/mock/cherry.bin/bun'
+          path.join('/mock/feature.binary.data', 'shims', 'myfd'),
+          path.join('/mock/feature.binary.data', 'shims', 'node'),
+          path.join('/mock/cherry.bin', 'bun')
         ].includes(candidate)
       )
       mockFs.readFileSync.mockImplementation((candidate: string) =>
-        candidate === '/mock/cherry.bin/.bun-version'
+        candidate === path.join('/mock/cherry.bin', '.bun-version')
           ? '1.2.3'
           : (() => {
               throw new Error('ENOENT')
@@ -454,7 +456,7 @@ describe('BinaryManager', () => {
           definition: { name: 'myfd', tool: 'github:sharkdp/fd', requestedVersion: '10.0.0' },
           availability: {
             source: 'mise',
-            path: '/mock/feature.binary.data/shims/myfd',
+            path: path.join('/mock/feature.binary.data', 'shims', 'myfd'),
             version: '10.0.0'
           },
           application: { status: 'applied', version: '10.0.0' }
@@ -463,7 +465,7 @@ describe('BinaryManager', () => {
           name: 'node',
           availability: {
             source: 'mise',
-            path: '/mock/feature.binary.data/shims/node',
+            path: path.join('/mock/feature.binary.data', 'shims', 'node'),
             version: '22.0.0'
           },
           application: { status: 'applied', version: '22.0.0' }
@@ -499,12 +501,15 @@ describe('BinaryManager', () => {
 
       expect(snapshots.fd).toEqual({
         name: 'fd',
-        availability: { source: 'mise', path: '/mock/feature.binary.data/shims/fd', version: '10.0.0' },
+        availability: { source: 'mise', path: path.join('/mock/feature.binary.data', 'shims', 'fd'), version: '10.0.0' },
         application: { status: 'applied', version: '10.0.0' }
       })
       expect(mockExecFileAsync).toHaveBeenCalledTimes(2)
       expect(mockExecFileAsync).toHaveBeenCalledWith('/mock/mise', ['which', 'fd'], expect.any(Object))
-      expect(mockFsp.access).toHaveBeenCalledWith('/mock/feature.binary.data/shims/fd', mockFs.constants.X_OK)
+      expect(mockFsp.access).toHaveBeenCalledWith(
+        path.join('/mock/feature.binary.data', 'shims', 'fd'),
+        mockFs.constants.X_OK
+      )
     })
 
     it('stays applied when the active entry exposes an install_path the shim resolves within', async () => {
@@ -529,7 +534,7 @@ describe('BinaryManager', () => {
 
       expect(snapshots.fd).toEqual({
         name: 'fd',
-        availability: { source: 'mise', path: '/mock/feature.binary.data/shims/fd', version: '10.0.0' },
+        availability: { source: 'mise', path: path.join('/mock/feature.binary.data', 'shims', 'fd'), version: '10.0.0' },
         application: { status: 'applied', version: '10.0.0' }
       })
     })
@@ -568,7 +573,7 @@ describe('BinaryManager', () => {
         name: 'lark-cli',
         availability: {
           source: 'mise',
-          path: '/mock/feature.binary.data/shims/lark-cli',
+          path: path.join('/mock/feature.binary.data', 'shims', 'lark-cli'),
           version: '1.0.77'
         },
         application: { status: 'applied', version: '1.0.77' }
@@ -617,7 +622,7 @@ describe('BinaryManager', () => {
 
       expect(snapshots.uv).toEqual({
         name: 'uv',
-        availability: { source: 'mise', path: '/mock/feature.binary.data/shims/uv', version: '0.9.0' },
+        availability: { source: 'mise', path: path.join('/mock/feature.binary.data', 'shims', 'uv'), version: '0.9.0' },
         application: { status: 'applied', version: '0.9.0' }
       })
     })
@@ -686,9 +691,9 @@ describe('BinaryManager', () => {
       MockMainCacheServiceUtils.setCacheValue('feature.binary.install_states', {
         bun: { status: 'failed', action: 'install', error: 'offline' }
       })
-      ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === '/mock/cherry.bin/bun')
+      ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === path.join('/mock/cherry.bin', 'bun'))
       mockFs.readFileSync.mockImplementation((candidate: string) =>
-        candidate === '/mock/cherry.bin/.bun-version'
+        candidate === path.join('/mock/cherry.bin', '.bun-version')
           ? '1.2.3'
           : (() => {
               throw new Error('ENOENT')
@@ -712,9 +717,9 @@ describe('BinaryManager', () => {
         { name: 'fd', tool: 'fd' },
         { name: 'gone', tool: 'gone' }
       ]
-      ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === '/mock/cherry.bin/bun')
+      ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === path.join('/mock/cherry.bin', 'bun'))
       mockFs.readFileSync.mockImplementation((candidate: string) =>
-        candidate === '/mock/cherry.bin/.bun-version'
+        candidate === path.join('/mock/cherry.bin', '.bun-version')
           ? '1.2.3'
           : (() => {
               throw new Error('ENOENT')
@@ -807,7 +812,7 @@ describe('BinaryManager', () => {
         ;(service as any).miseBin = '/mock/mise'
         ;(service as any).isolatedEnv = {}
         ;(mockFs.existsSync as any).mockImplementation(
-          (candidate: string) => candidate === '/mock/feature.binary.data/shims/fd'
+          (candidate: string) => candidate === path.join('/mock/feature.binary.data', 'shims', 'fd')
         )
         mockExecFileAsync.mockImplementation(async (_bin: string, args: string[]) => {
           if (args[0] === 'ls') {
@@ -819,7 +824,7 @@ describe('BinaryManager', () => {
 
         await expect(service.getToolSnapshots(['fd'])).resolves.toMatchObject({
           fd: {
-            availability: { source: 'mise', path: '/mock/feature.binary.data/shims/fd', version: '10.0.0' },
+            availability: { source: 'mise', path: path.join('/mock/feature.binary.data', 'shims', 'fd'), version: '10.0.0' },
             application: { status: 'broken', version: '10.0.0' }
           }
         })
@@ -848,7 +853,7 @@ describe('BinaryManager', () => {
         ;(service as any).miseBin = '/mock/mise'
         ;(service as any).isolatedEnv = {}
         ;(mockFs.existsSync as any).mockImplementation(
-          (candidate: string) => candidate === '/mock/feature.binary.data/shims/fd'
+          (candidate: string) => candidate === path.join('/mock/feature.binary.data', 'shims', 'fd')
         )
         mockExecFileAsync.mockImplementation(async (_bin: string, args: string[]) => {
           if (args[0] === 'ls') return { stdout: '{}', stderr: '' }
@@ -862,7 +867,7 @@ describe('BinaryManager', () => {
         // elsewhere: runnable (availability=mise, no trusted version) yet not applied.
         expect(snapshots.fd).toEqual({
           name: 'fd',
-          availability: { source: 'mise', path: '/mock/feature.binary.data/shims/fd' },
+          availability: { source: 'mise', path: path.join('/mock/feature.binary.data', 'shims', 'fd') },
           application: { status: 'conflict' }
         })
       })
@@ -920,9 +925,9 @@ describe('BinaryManager', () => {
       it('reports unknown/backend_unavailable for every name and never runs mise when mise is missing', async () => {
         const service = new BinaryManager()
         // miseBin stays null.
-        ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === '/mock/cherry.bin/bun')
+        ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === path.join('/mock/cherry.bin', 'bun'))
         mockFs.readFileSync.mockImplementation((candidate: string) =>
-          candidate === '/mock/cherry.bin/.bun-version'
+          candidate === path.join('/mock/cherry.bin', '.bun-version')
             ? '1.2.3'
             : (() => {
                 throw new Error('ENOENT')
@@ -950,9 +955,9 @@ describe('BinaryManager', () => {
         const service = new BinaryManager()
         ;(service as any).miseBin = '/mock/mise'
         ;(service as any).isolatedEnv = {}
-        ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === '/mock/cherry.bin/bun')
+        ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === path.join('/mock/cherry.bin', 'bun'))
         mockFs.readFileSync.mockImplementation((candidate: string) =>
-          candidate === '/mock/cherry.bin/.bun-version'
+          candidate === path.join('/mock/cherry.bin', '.bun-version')
             ? '1.2.3'
             : (() => {
                 throw new Error('ENOENT')
@@ -982,7 +987,7 @@ describe('BinaryManager', () => {
         ;(service as any).miseBin = '/mock/mise'
         ;(service as any).isolatedEnv = {}
         ;(mockFs.existsSync as any).mockImplementation(
-          (candidate: string) => candidate === '/mock/feature.binary.data/shims/fd'
+          (candidate: string) => candidate === path.join('/mock/feature.binary.data', 'shims', 'fd')
         )
         mockExecFileAsync.mockImplementation(async (_bin: string, args: string[]) => {
           if (args[0] === 'ls') throw new Error('mise ls boom')
@@ -994,7 +999,7 @@ describe('BinaryManager', () => {
 
         expect(snapshots.fd).toEqual({
           name: 'fd',
-          availability: { source: 'mise', path: '/mock/feature.binary.data/shims/fd' },
+          availability: { source: 'mise', path: path.join('/mock/feature.binary.data', 'shims', 'fd') },
           application: { status: 'unknown', reason: 'query_failed' }
         })
       })
@@ -1032,7 +1037,7 @@ describe('BinaryManager', () => {
         expect(snapshots.fd.application).toEqual({ status: 'applied', version: 'nightly-2026' })
         expect(snapshots.fd.availability).toEqual({
           source: 'mise',
-          path: '/mock/feature.binary.data/shims/fd',
+          path: path.join('/mock/feature.binary.data', 'shims', 'fd'),
           version: 'nightly-2026'
         })
       })
@@ -1054,7 +1059,7 @@ describe('BinaryManager', () => {
           definition: { name: 'node', tool: 'core:node', requestedVersion: '22.0.0' },
           availability: {
             source: 'mise',
-            path: '/mock/feature.binary.data/shims/node',
+            path: path.join('/mock/feature.binary.data', 'shims', 'node'),
             version: '22.0.0'
           },
           application: { status: 'applied', version: '22.0.0' }
@@ -1074,7 +1079,10 @@ describe('BinaryManager', () => {
         const snapshots = await service.getToolSnapshots(['fd'])
 
         expect(snapshots.fd.application).toEqual({ status: 'applied', version: '10.0.0' })
-        expect(mockFsp.access).toHaveBeenCalledWith('/mock/feature.binary.data/shims/fd.exe', mockFs.constants.F_OK)
+        expect(mockFsp.access).toHaveBeenCalledWith(
+          path.join('/mock/feature.binary.data', 'shims', 'fd.exe'),
+          mockFs.constants.F_OK
+        )
       })
     })
   })
@@ -2302,12 +2310,17 @@ describe('BinaryManager', () => {
       // re-exec'd child mise resolves against the isolated shims.
       const original = { ...process.env }
       try {
-        process.env['PATH'] = '/usr/bin:/bin'
+        process.env['PATH'] = ['/usr/bin', '/bin'].join(path.delimiter)
         const service = new BinaryManager()
         ;(service as any).miseBin = '/mock/bin/mise'
         const env = await (service as any).buildIsolatedEnv()
 
-        expect(env['PATH'].split(':')).toEqual(['/mock/feature.binary.data/shims', '/mock/bin', '/usr/bin', '/bin'])
+        expect(env['PATH'].split(path.delimiter)).toEqual([
+          path.join('/mock/feature.binary.data', 'shims'),
+          '/mock/bin',
+          '/usr/bin',
+          '/bin'
+        ])
       } finally {
         process.env = original
       }
@@ -2415,10 +2428,10 @@ describe('BinaryManager', () => {
       const env = await (service as any).buildIsolatedEnv()
 
       // Install subprocess MUST be isolated from the user's real home.
-      expect(env['HOME']).toBe('/mock/feature.binary.data/home')
-      expect(env['XDG_CONFIG_HOME']).toBe('/mock/feature.binary.data/xdg/config')
-      expect(env['XDG_CACHE_HOME']).toBe('/mock/feature.binary.data/xdg/cache')
-      expect(env['XDG_STATE_HOME']).toBe('/mock/feature.binary.data/xdg/state')
+      expect(env['HOME']).toBe(path.join('/mock/feature.binary.data', 'home'))
+      expect(env['XDG_CONFIG_HOME']).toBe(path.join('/mock/feature.binary.data', 'xdg', 'config'))
+      expect(env['XDG_CACHE_HOME']).toBe(path.join('/mock/feature.binary.data', 'xdg', 'cache'))
+      expect(env['XDG_STATE_HOME']).toBe(path.join('/mock/feature.binary.data', 'xdg', 'state'))
     })
   })
 
@@ -2914,16 +2927,16 @@ describe('BinaryManager', () => {
         stderr: ''
       })
       ;(mockFsp.readdir as any).mockImplementation(async (directory: string) =>
-        directory === '/mock/feature.binary.data/shims'
+        directory === path.join('/mock/feature.binary.data', 'shims')
           ? [
               { name: 'acme', isFile: () => true, isSymbolicLink: () => false },
               { name: 'node', isFile: () => true, isSymbolicLink: () => false }
             ]
           : []
       )
-      ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === '/mock/cherry.bin/bun')
+      ;(mockFs.existsSync as any).mockImplementation((candidate: string) => candidate === path.join('/mock/cherry.bin', 'bun'))
       mockFs.readFileSync.mockImplementation((candidate: string) =>
-        candidate === '/mock/cherry.bin/.bun-version'
+        candidate === path.join('/mock/cherry.bin', '.bun-version')
           ? '1.3.0'
           : (() => {
               throw new Error('ENOENT')
@@ -3036,19 +3049,19 @@ describe('BinaryManager', () => {
         })
         mockFs.existsSync.mockImplementation((...args: unknown[]) => {
           const p = String(args[0])
-          if (p.includes('app.root.resources.binaries/win32-x64/mise')) return true
-          return p.endsWith('cherry.bin/mise.exe')
+          if (p.includes(path.join('app.root.resources.binaries', 'win32-x64', 'mise'))) return true
+          return p.endsWith(path.join('/mock/cherry.bin', 'mise.exe'))
         })
 
         await (service as any).extractBundledBinaries()
 
         expect(mockFsp.copyFile).toHaveBeenCalledWith(
-          expect.stringContaining('app.root.resources.binaries/win32-x64/mise.exe'),
-          expect.stringContaining('cherry.bin/mise.exe.tmp-')
+          expect.stringContaining(path.join('app.root.resources.binaries', 'win32-x64', 'mise.exe')),
+          expect.stringContaining(path.join('/mock/cherry.bin', 'mise.exe.tmp-'))
         )
         expect(mockFsp.copyFile).toHaveBeenCalledWith(
-          expect.stringContaining('app.root.resources.binaries/win32-x64/mise-shim.exe'),
-          expect.stringContaining('cherry.bin/mise-shim.exe.tmp-')
+          expect.stringContaining(path.join('app.root.resources.binaries', 'win32-x64', 'mise-shim.exe')),
+          expect.stringContaining(path.join('/mock/cherry.bin', 'mise-shim.exe.tmp-'))
         )
       } finally {
         Object.defineProperties(process, { platform: originalPlatform, arch: originalArch })

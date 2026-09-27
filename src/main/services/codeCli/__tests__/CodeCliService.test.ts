@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import type { CodeCliRunInput } from '@shared/ipc/schemas/codeCli'
 import { CodeCli, TerminalApp } from '@shared/types/codeCli'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -258,7 +260,7 @@ describe('CodeCliService', () => {
     const { codeCliService } = await loadModules()
 
     await expect(codeCliService.checkClaudeLogin()).resolves.toBe(true)
-    expect(fs.existsSync).toHaveBeenCalledWith('/home/me/.claude/.credentials.json')
+    expect(fs.existsSync).toHaveBeenCalledWith(path.join('/home/me/.claude', '.credentials.json'))
   })
 
   // A broken rc file makes the shell env probe throw. That is NOT "not signed
@@ -545,8 +547,17 @@ describe('CodeCliService', () => {
       const launchCall = vi.mocked(spawn).mock.calls.at(-1)!
       const launchArgs = (launchCall[1] ?? []).join(' ')
       const launchEnv = launchCall[2]?.env as Record<string, string>
+      // mergeBinaryExecutionEnv joins shims + ambient PATH with `path.delimiter` on the
+      // non-Windows platform branch (binaryEnv.ts), which on a win32 host is ';'.
+      // The shims dir is path.join-built AND the macOS Terminal launcher wraps the whole
+      // command with escapeForAppleScript(), which doubles backslashes first — mirror
+      // both transforms. ':' inside the ambient value is raw mock data, left verbatim.
+      const shimsPath = path.join('/mock/binary-data', 'shims').replaceAll('\\', '\\\\')
       expect(launchArgs).toContain(
-        "PATH='\\''/mock/binary-data/shims:/usr/local/$(touch /tmp/pwn):`whoami`:$HOME:/usr/bin'\\''"
+        "PATH='\\''" +
+          shimsPath +
+          path.delimiter +
+          "/usr/local/$(touch /tmp/pwn):`whoami`:$HOME:/usr/bin'\\''"
       )
       expect(launchArgs).toContain("MISE_DATA_DIR='\\''/mock/binary-data'\\''")
       expect(launchArgs).toContain('for _cherry_mise_key in $(env | sed -n')

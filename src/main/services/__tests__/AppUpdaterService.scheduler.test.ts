@@ -60,6 +60,9 @@ vi.mock('electron-updater', () => ({
     checkForUpdates: vi.fn(),
     downloadUpdate: vi.fn(),
     quitAndInstall: vi.fn(),
+    // Real AppUpdater exposes the resolved feed; onAllReady skips scheduling when
+    // it points at a `.invalid` placeholder host, so return a real-looking URL.
+    getFeedURL: vi.fn(() => 'https://example.com/update'),
     channel: '',
     allowDowngrade: false,
     disableDifferentialDownload: false,

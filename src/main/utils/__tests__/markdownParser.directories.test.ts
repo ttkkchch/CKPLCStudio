@@ -26,6 +26,11 @@ describe('findAllSkillDirectories', () => {
 
     const result = await findAllSkillDirectories(root, root)
 
-    expect(result.map((candidate) => candidate.sourcePath).sort()).toEqual(['first/shared-name', 'second/shared-name'])
+    // sourcePath is built with path.join in the product; mirror that so the
+    // expectation is separator-agnostic.
+    expect(result.map((candidate) => candidate.sourcePath).sort()).toEqual([
+      path.join('first', 'shared-name'),
+      path.join('second', 'shared-name')
+    ])
   })
 })

@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -183,8 +184,8 @@ describe('evaluateCandidateVersion', () => {
     // Intermediates are surfaced for the gate's diagnostic log.
     expect(result.versionLogExists).toBe(false)
     expect(result.previousVersion).toBeNull()
-    // version.log path is derived from the candidate directory.
-    expect(mockedExistsSync).toHaveBeenCalledWith('/data/dir/version.log')
+    // version.log path is derived from the candidate directory via path.join.
+    expect(mockedExistsSync).toHaveBeenCalledWith(path.join('/data/dir', 'version.log'))
   })
 
   it('passes when version.log records a previous version at or above the required v1', () => {

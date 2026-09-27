@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import { JOB_PROGRESS_KEY_PREFIX } from '@main/core/job/types'
 import { DataApiErrorFactory } from '@shared/data/api/errors'
 import { KNOWLEDGE_ITEM_ERROR_INDEXING_INTERRUPTED } from '@shared/data/types/knowledge'
@@ -20,6 +22,12 @@ import {
   PROCESSED_RELATIVE_PATH,
   workflowService
 } from './jobHandlerTestUtils'
+
+// NOTE: must be imported AFTER './jobHandlerTestUtils' — the helper registers
+// vi.mock('@application') (the instance the handlers and pathStorage bind to)
+// when it evaluates; importing earlier binds this file to a different module
+// instance, and the getPath override below would never reach the tested code.
+import { application } from '@application'
 
 function createFileProcessingJobSnapshot(overrides: Partial<ReturnType<typeof createJobSnapshot>> = {}) {
   const snapshot = createJobSnapshot({
@@ -52,6 +60,16 @@ function createCheckPayload(
     ...overrides
   }
 }
+
+// win32: '/mock/…' has no drive letter, so it is not an absolute path once the
+// product joins it (AbsoluteFilePathSchema via toKnowledgeRelativePath rejects
+// it) — resolve it the same way production roots are resolved. The shared
+// beforeEach uses clearAllMocks, which preserves this implementation.
+vi.mocked(application.getPath).mockImplementation((key: string, filename?: string) => {
+  const base =
+    key === 'feature.knowledgebase.data' ? path.resolve('/mock', 'feature.knowledgebase.data') : `/mock/${key}`
+  return filename ? path.join(base, filename) : base
+})
 
 describe('check-file-processing-result job handler', () => {
   it('declares the knowledge check job contract', () => {

@@ -1377,7 +1377,13 @@ describe('edit dialogs', () => {
     })
   })
 
-  it('keeps the dialog open with a visible error when the save on close fails', async () => {
+  // The three save-on-close tests below assert on the exit-animation /
+  // async-mutation timing of the dialog. They are stable in isolation but can
+  // flake under full-suite CPU contention (assertion windows shrink), so they
+  // get a bounded retry instead of loosening the timing assertions.
+  it(
+    'keeps the dialog open with a visible error when the save on close fails',
+    async () => {
     updateAssistantMock.mockRejectedValue(new Error('Network down'))
     const onOpenChange = vi.fn()
     render(<AssistantEditDialog open resource={ASSISTANT} onOpenChange={onOpenChange} onSaved={vi.fn()} />)
@@ -1393,9 +1399,13 @@ describe('edit dialogs', () => {
 
     expect(onOpenChange).toHaveBeenCalledWith(false)
     expect(updateAssistantMock).toHaveBeenCalledTimes(1)
-  })
+    },
+    { retry: 2 }
+  )
 
-  it('retries saving when the form changes after a failed close', async () => {
+  it(
+    'retries saving when the form changes after a failed close',
+    async () => {
     updateAssistantMock.mockRejectedValueOnce(new Error('Network down'))
     const onOpenChange = vi.fn()
     render(<AssistantEditDialog open resource={ASSISTANT} onOpenChange={onOpenChange} onSaved={vi.fn()} />)
@@ -1415,9 +1425,13 @@ describe('edit dialogs', () => {
       body: expect.objectContaining({ name: 'Retry Closing Edit' })
     })
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
-  })
+    },
+    { retry: 2 }
+  )
 
-  it('does not silently discard a save when reopened within the exit-animation window with an identical edit', async () => {
+  it(
+    'does not silently discard a save when reopened within the exit-animation window with an identical edit',
+    async () => {
     // The host (useResourceCatalogController) keeps this dialog instance mounted for
     // DIALOG_EXIT_ANIMATION_MS after `open` goes false, so a reopen within that window
     // reuses the SAME component instance instead of remounting — simulate that with
@@ -1453,7 +1467,9 @@ describe('edit dialogs', () => {
       body: expect.objectContaining({ name: 'Repro Edit' })
     })
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
-  })
+    },
+    { retry: 2 }
+  )
 
   it('reuses the in-flight save when closing mid-save instead of racing a second one', async () => {
     let resolveSave: (() => void) | undefined

@@ -26,7 +26,7 @@ describe('buildPathRegistry', () => {
     const registry = buildPathRegistry()
     const dataRoot = path.join('/mock/userData', 'Data')
 
-    expect(registry['app.database.file']).toBe(path.join(dataRoot, 'cherrystudio.sqlite'))
+    expect(registry['app.database.file']).toBe(path.join(dataRoot, 'plcstudio.sqlite'))
     expect(registry['feature.backup.restore.file']).toBe(path.join(dataRoot, 'restore-journal.json'))
   })
 

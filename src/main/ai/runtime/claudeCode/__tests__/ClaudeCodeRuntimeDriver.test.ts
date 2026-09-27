@@ -1,8 +1,20 @@
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
 import { MODEL_CAPABILITY } from '@shared/data/types/model'
 import { mockMainLoggerService } from '@test-mocks/MainLoggerService'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as StreamAdapterModule from '../streamAdapter'
+
+// file:// URLs must be built from real absolute paths: on win32, fileURLToPath
+// rejects drive-less POSIX URLs like file:///tmp/x.png ("File URL path must be absolute").
+const pixelImagePath = path.resolve('/tmp/pixel.png')
+const pixelImageUrl = pathToFileURL(pixelImagePath).href
+const specPdfPath = path.resolve('/tmp/spec.pdf')
+const specPdfUrl = pathToFileURL(specPdfPath).href
+const diagramImagePath = path.resolve('/tmp/diagram.bmp')
+const diagramImageUrl = pathToFileURL(diagramImagePath).href
 
 const mocks = vi.hoisted(() => ({
   buildRequest: vi.fn(),
@@ -300,7 +312,7 @@ describe('ClaudeCodeRuntimeDriver', () => {
           parts: [
             { type: 'text', text: 'describe this' },
             { type: 'file', url: 'file:///tmp/pixel.png', mediaType: 'image/png', filename: 'pixel.png' },
-            { type: 'file', url: 'file:///tmp/spec.pdf', mediaType: 'application/pdf', filename: 'spec.pdf' }
+            { type: 'file', url: specPdfUrl, mediaType: 'application/pdf', filename: 'spec.pdf' }
           ]
         }
       }
@@ -314,7 +326,7 @@ describe('ClaudeCodeRuntimeDriver', () => {
           content: [
             {
               type: 'text',
-              text: 'describe this\n\nAttached files (read them with your tools using these absolute paths):\n- /tmp/spec.pdf'
+              text: `describe this\n\nAttached files (read them with your tools using these absolute paths):\n- ${specPdfPath}`
             },
             { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'QUJD' } }
           ]
@@ -465,7 +477,7 @@ describe('ClaudeCodeRuntimeDriver', () => {
             { type: 'text', text: 'inspect these images' },
             {
               type: 'file',
-              url: 'file:///tmp/diagram.bmp',
+              url: diagramImageUrl,
               mediaType: 'image/bmp',
               filename: 'diagram.bmp',
               providerMetadata: { cherry: { fileEntryId: 'entry-bmp' } }
@@ -498,7 +510,7 @@ describe('ClaudeCodeRuntimeDriver', () => {
           content: [
             {
               type: 'text',
-              text: 'inspect these images\n\nAttached files (read them with your tools using these absolute paths):\n- /tmp/diagram.bmp\n\nUnavailable attachments: missing.png, empty.png, missing-url.png'
+              text: `inspect these images\n\nAttached files (read them with your tools using these absolute paths):\n- ${diagramImagePath}\n\nUnavailable attachments: missing.png, empty.png, missing-url.png`
             },
             { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'QUJD' } }
           ]
@@ -654,7 +666,7 @@ describe('ClaudeCodeRuntimeDriver', () => {
         data: {
           parts: [
             { type: 'text', text: 'describe this' },
-            { type: 'file', url: 'file:///tmp/pixel.png', mediaType: 'image/png', filename: 'pixel.png' }
+            { type: 'file', url: pixelImageUrl, mediaType: 'image/png', filename: 'pixel.png' }
           ]
         }
       }
@@ -665,7 +677,7 @@ describe('ClaudeCodeRuntimeDriver', () => {
         message: {
           role: 'user',
           content:
-            'describe this\n\nAttached files (read them with your tools using these absolute paths):\n- /tmp/pixel.png'
+            `describe this\n\nAttached files (read them with your tools using these absolute paths):\n- ${pixelImagePath}`
         }
       },
       done: false

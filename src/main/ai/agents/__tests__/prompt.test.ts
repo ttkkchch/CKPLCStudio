@@ -33,9 +33,17 @@ const mockedReaddir = vi.mocked(readdir)
 const mockedRealpath = vi.mocked(realpath)
 
 function setupFiles(files: Record<string, string>) {
+  // Normalize fixture keys so lookups match on win32 where path.join
+  // produces backslash-separated paths.
+  const norm = (p: unknown) => path.normalize(String(p))
+  const normalizedFiles: Record<string, string> = {}
+  for (const [key, value] of Object.entries(files)) {
+    normalizedFiles[norm(key)] = value
+  }
+
   // Build directory listing from file paths
   const dirs = new Map<string, string[]>()
-  for (const filePath of Object.keys(files)) {
+  for (const filePath of Object.keys(normalizedFiles)) {
     const dir = path.dirname(filePath)
     const name = path.basename(filePath)
     if (!dirs.has(dir)) dirs.set(dir, [])
@@ -52,8 +60,8 @@ function setupFiles(files: Record<string, string>) {
   }
 
   mockedLstat.mockImplementation(async (filePath) => {
-    const p = typeof filePath === 'string' ? filePath : filePath.toString()
-    if (files[p] !== undefined) {
+    const p = norm(filePath)
+    if (normalizedFiles[p] !== undefined) {
       return {
         mtimeMs: 1000,
         isFile: () => true,
@@ -72,26 +80,26 @@ function setupFiles(files: Record<string, string>) {
     throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
   })
   mockedOpen.mockImplementation(async (filePath) => {
-    const p = typeof filePath === 'string' ? filePath : filePath.toString()
-    if (files[p] !== undefined) {
+    const p = norm(filePath)
+    if (normalizedFiles[p] !== undefined) {
       return {
         stat: async () => ({
           mtimeMs: 1000,
           isFile: () => true
         }),
-        readFile: async () => files[p],
+        readFile: async () => normalizedFiles[p],
         close: async () => undefined
       } as any
     }
     throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
   })
   mockedReaddir.mockImplementation(async (dirPath) => {
-    const p = typeof dirPath === 'string' ? dirPath : dirPath.toString()
+    const p = norm(dirPath)
     return (dirs.get(p) ?? []) as any
   })
   mockedRealpath.mockImplementation(async (targetPath) => {
-    const p = typeof targetPath === 'string' ? targetPath : targetPath.toString()
-    if (files[p] !== undefined || dirs.has(p)) return p
+    const p = norm(targetPath)
+    if (normalizedFiles[p] !== undefined || dirs.has(p)) return p
     throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
   })
 }
@@ -109,7 +117,7 @@ describe('PromptBuilder', () => {
 
     const result = await builder.buildSystemPrompt('/workspace')
 
-    expect(result).toContain('You are a personal assistant running inside Cherry Studio')
+    expect(result).toContain('You are a personal assistant running inside CKPLCStudio')
     expect(result).toContain('## Autonomy Tools')
     expect(result).toContain('## Memories')
     expect(result).toContain('`/workspace/SOUL.md`')
@@ -143,7 +151,7 @@ describe('PromptBuilder', () => {
     const result = await builder.buildSystemPrompt('/workspace')
 
     expect(result).toContain('You are CustomBot')
-    expect(result).not.toContain('You are a personal assistant running inside Cherry Studio')
+    expect(result).not.toContain('You are a personal assistant running inside CKPLCStudio')
   })
 
   it('includes soul.md in memories section', async () => {
@@ -247,8 +255,8 @@ describe('PromptBuilder', () => {
   it('ignores symbolic-link persona files', async () => {
     setupFiles({ '/workspace/SOUL.md': 'must not be read' })
     mockedLstat.mockImplementation(async (filePath) => {
-      const p = typeof filePath === 'string' ? filePath : filePath.toString()
-      if (p === '/workspace/SOUL.md') {
+      const p = path.normalize(typeof filePath === 'string' ? filePath : filePath.toString())
+      if (p === path.normalize('/workspace/SOUL.md')) {
         return {
           mtimeMs: 1000,
           isFile: () => true,

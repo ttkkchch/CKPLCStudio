@@ -154,16 +154,22 @@ function tmpNameFor(target: string): string {
 /**
  * Whether an errno from a directory-fsync attempt should be silently
  * swallowed instead of warn-logged. Only codes that mean "this FS semantically
- * rejects directory fsync" qualify — EINVAL / EISDIR / ENOTSUP all come from
- * Windows, FUSE, or network mounts that don't expose dir-handle sync. EPERM /
- * EACCES intentionally do NOT qualify: those usually mean the userData
- * directory's ACL drifted (sandbox containment shift, SELinux/AppArmor
- * tightening, manual chown), and silently skipping the dashboard signal would
- * mask the regression. Exported for direct unit coverage of the classification.
+ * rejects directory fsync" qualify — EINVAL / EISDIR / ENOTSUP come from
+ * Windows, FUSE, or network mounts that don't expose dir-handle sync, and
+ * Windows itself rejects fsync on a directory handle with EPERM (libuv), so
+ * EPERM is silenced on win32 only. EACCES always warns, and EPERM warns on
+ * POSIX: those usually mean the userData directory's ACL drifted (sandbox
+ * containment shift, SELinux/AppArmor tightening, manual chown), and silently
+ * skipping the dashboard signal would mask the regression. Exported for
+ * direct unit coverage of the classification.
  * @internal
  */
-export function shouldSilenceFsyncDirError(code: string | undefined): boolean {
-  return code === 'EINVAL' || code === 'EISDIR' || code === 'ENOTSUP'
+export function shouldSilenceFsyncDirError(
+  code: string | undefined,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (code === 'EINVAL' || code === 'EISDIR' || code === 'ENOTSUP') return true
+  return platform === 'win32' && code === 'EPERM'
 }
 
 /**

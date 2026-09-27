@@ -289,7 +289,7 @@ describe('buildSystemPrompt — builtin Cherry Assistant definition', () => {
 
     const result = await buildSystemPrompt(makeSession(), agent, '/tmp/cwd')
 
-    expect(result as string).toContain('You are Cherry Assistant, the built-in helper for Cherry Studio')
+    expect(result as string).toContain('You are PLC Assistant, the built-in helper for CKPLCStudio')
   })
 
   it('applies the external channel security policy for linked assistant sessions', async () => {

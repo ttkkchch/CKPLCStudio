@@ -3,6 +3,7 @@ import type * as NodeFs from 'node:fs'
 import fs from 'node:fs'
 import type * as NodeOs from 'node:os'
 import os from 'node:os'
+import path from 'node:path'
 
 import { application } from '@application'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -98,7 +99,9 @@ describe('OvOcr prepareContext', () => {
       config as never
     )
 
-    expect(first.workingDirectoryPrefix).toBe('/tmp/app-temp/cherry-ovocr-')
+    // Product builds the prefix with path.join — mirror it so the expectation
+    // holds on both posix and win32 separators.
+    expect(first.workingDirectoryPrefix).toBe(path.join('/tmp/app-temp', 'cherry-ovocr-'))
   })
 })
 

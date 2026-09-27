@@ -1,6 +1,9 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { application } from '@application'
 
 import { installBuiltinSkills } from '../builtinSkills'
 
@@ -32,10 +35,14 @@ vi.mock('@main/ai/skills/SkillService', () => ({
   skillService: { syncBuiltinSkill: mockSyncBuiltinSkill }
 }))
 
-// Matches the stub in tests/main.setup.ts → mockApplicationFactory().getPath
-const resourceSkillsPath = '/mock/feature.agents.skills.builtin'
+// tests/main.setup.ts globally stubs application.getPath as a vi.fn; pin it here to a
+// path.join-built value so the separator-sensitive prefix filter inside
+// installBuiltinSkills (sourcePath.startsWith(resourceSkillsPath + path.sep)) sees
+// consistent separators on every platform.
+const resourceSkillsPath = path.join('/mock', 'feature.agents.skills.builtin')
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(application.getPath).mockImplementation((key: string) => path.join('/mock', key))
   mockSyncBuiltinSkill.mockResolvedValue(false)
 })
 
@@ -59,7 +66,7 @@ describe('installBuiltinSkills', () => {
 
     await installBuiltinSkills()
 
-    expect(mockSyncBuiltinSkill).toHaveBeenCalledWith('my-skill', `${resourceSkillsPath}/my-skill`, '2.0.0')
+    expect(mockSyncBuiltinSkill).toHaveBeenCalledWith('my-skill', path.join(resourceSkillsPath, 'my-skill'), '2.0.0')
   })
 
   it('should skip entries with path traversal in name', async () => {

@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { applicationMock, loggerMock, loadExtensionMock, installExtensionMock, platformMock } = vi.hoisted(() => {
@@ -61,11 +62,13 @@ describe('installDevtoolsExtensions', () => {
     await installDevtoolsExtensions()
 
     expect(installExtensionMock).toHaveBeenCalledWith('react-devtools')
-    expect(loadExtensionMock).toHaveBeenCalledWith('/mock/app.root.resources/devtools/data-api')
+    // Product code builds the path with path.join — mirror it so the expectation
+    // holds on both posix and win32 separators.
+    expect(loadExtensionMock).toHaveBeenCalledWith(join('/mock/app.root.resources', 'devtools', 'data-api'))
     expect(loggerMock.info).toHaveBeenCalledWith('Added Extension: React Developer Tools')
     expect(loggerMock.info).toHaveBeenCalledWith('Added Extension: DataApi DevTools')
     // main-network is no longer installed by core — its service installs its own panel.
-    expect(loadExtensionMock).not.toHaveBeenCalledWith('/mock/app.root.resources/devtools/main-network')
+    expect(loadExtensionMock).not.toHaveBeenCalledWith(join('/mock/app.root.resources', 'devtools', 'main-network'))
   })
 
   it('logs install failures without throwing', async () => {

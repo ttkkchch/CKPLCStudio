@@ -86,7 +86,9 @@ describe('resolveWorkspaceFile', () => {
 
   it('rejects a symlink that points outside the workspace', async () => {
     await writeFile(path.join(outside, 'secret.txt'), 'top secret')
-    await symlink(path.join(outside, 'secret.txt'), path.join(workspace, 'link.txt'))
+    // A junction is a symlink escape too and, unlike file symlinks, can be created
+    // without elevated rights on Windows; the guard rejects on realpath containment.
+    await symlink(outside, path.join(workspace, 'link.txt'), 'junction')
 
     await expect(resolveWorkspaceFile(workspace, 'link.txt')).rejects.toThrow(/outside the workspace/)
   })

@@ -21,7 +21,16 @@ const { copyMock, writeMock, ensureDirMock, removeMock, removeDirMock, rmdirMock
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
-  return mockApplicationFactory()
+  const mod = mockApplicationFactory()
+  // '/mock/…' has no drive letter, so it is not an absolute path on win32 once
+  // the product joins it (AbsoluteFilePathSchema rejects it) — resolve it the
+  // same way production roots are resolved.
+  const knowledgeDataDir = path.resolve('/mock', 'feature.knowledgebase.data')
+  mod.application.getPath.mockImplementation((key: string, filename?: string) => {
+    const base = key === 'feature.knowledgebase.data' ? knowledgeDataDir : `/mock/${key}`
+    return filename ? path.join(base, filename) : base
+  })
+  return mod
 })
 
 vi.mock('@logger', () => ({

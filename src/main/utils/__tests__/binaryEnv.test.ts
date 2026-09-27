@@ -1,6 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import path from 'node:path'
+
+import { describe, expect, it, vi } from 'vitest'
 
 import { getBinaryIsolatedHomeEnv, getBinarySearchDirs, getBinaryShimsDir, mergeBinaryExecutionEnv } from '../binaryEnv'
+
+// Pin the non-Windows code path so this suite asserts the posix branch on any
+// host platform; the Windows branch is covered in binaryEnv.windows.test.ts.
+vi.mock('@main/core/platform', () => ({
+  isWin: false,
+  isMac: false,
+  isLinux: true,
+  isDev: false,
+  isPortable: false
+}))
 
 // Real `node:path` (posix on CI) — the dedup's canonicalization runs against
 // the actual normalize()/delimiter, not an identity stub. Windows case-folding
@@ -8,26 +20,26 @@ import { getBinaryIsolatedHomeEnv, getBinarySearchDirs, getBinaryShimsDir, merge
 
 describe('getBinarySearchDirs', () => {
   it('exposes the mise shims directory without relying on search order', () => {
-    expect(getBinaryShimsDir()).toBe('/mock/feature.binary.data/shims')
+    expect(getBinaryShimsDir()).toBe(path.join('/mock/feature.binary.data', 'shims'))
   })
 
   it('returns the mise shims dir before the bundled cherry.bin dir', () => {
     // Shims must precede cherry.bin so a user-installed copy shadows the bundled
     // one — the same ordering getBinaryPath() and shellEnv.ts rely on. The global
     // '@application' mock resolves 'feature.binary.data' and 'cherry.bin'.
-    expect(getBinarySearchDirs()).toEqual(['/mock/feature.binary.data/shims', '/mock/cherry.bin'])
+    expect(getBinarySearchDirs()).toEqual([path.join('/mock/feature.binary.data', 'shims'), '/mock/cherry.bin'])
   })
 })
 
 describe('mergeBinaryExecutionEnv', () => {
-  const shims = '/mock/feature.binary.data/shims'
+  const shims = path.join('/mock/feature.binary.data', 'shims')
 
   it('does not duplicate the mise shims dir when the input PATH already carries it', () => {
     // shellEnv appends the tool dirs upstream, so the input PATH can already hold
     // the shims dir that mergeBinaryExecutionEnv prepends — it must appear once.
-    const { PATH } = mergeBinaryExecutionEnv({ PATH: `${shims}:/usr/bin` })
+    const { PATH } = mergeBinaryExecutionEnv({ PATH: [shims, '/usr/bin'].join(path.delimiter) })
 
-    const segments = PATH.split(':')
+    const segments = PATH.split(path.delimiter)
     expect(segments.filter((s) => s === shims)).toHaveLength(1)
     expect(segments[0]).toBe(shims) // prepended copy wins, later duplicate dropped
   })
@@ -38,7 +50,7 @@ describe('mergeBinaryExecutionEnv', () => {
     // ordering can't silently regress.
     const { PATH } = mergeBinaryExecutionEnv({ PATH: '/usr/bin' }, ['/opt/mise/bin'])
 
-    expect(PATH.split(':')).toEqual([shims, '/opt/mise/bin', '/usr/bin'])
+    expect(PATH.split(path.delimiter)).toEqual([shims, '/opt/mise/bin', '/usr/bin'])
   })
 })
 
@@ -48,7 +60,7 @@ describe('getBinaryIsolatedHomeEnv', () => {
     // stay absent so nothing spurious leaks into the isolated env. Windows
     // presence is covered in binaryEnv.windows.test.ts.
     const env = getBinaryIsolatedHomeEnv()
-    expect(env['HOME']).toBe('/mock/feature.binary.data/home')
+    expect(env['HOME']).toBe(path.join('/mock/feature.binary.data', 'home'))
     expect(env['LOCALAPPDATA']).toBeUndefined()
     expect(env['APPDATA']).toBeUndefined()
   })

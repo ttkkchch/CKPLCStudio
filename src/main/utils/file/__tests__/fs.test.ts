@@ -106,8 +106,10 @@ describe('probeReadable', () => {
     const f = path.join(tmp, 'a.txt')
     await writeFile(f, 'x')
     // Treating a regular file as a directory parent yields ENOTDIR, not ENOENT, so the probe must
-    // report it as unverifiable rather than missing.
-    expect(await probeReadable(path.join(f, 'child') as AbsoluteFilePath)).toBe('unverifiable')
+    // report it as unverifiable rather than missing. Windows collapses the same path to ENOENT
+    // (no ENOTDIR from the kernel), so accept the platform-specific mapping.
+    const expectation = process.platform === 'win32' ? 'missing' : 'unverifiable'
+    expect(await probeReadable(path.join(f, 'child') as AbsoluteFilePath)).toBe(expectation)
   })
 })
 
@@ -115,23 +117,35 @@ describe('shouldSilenceFsyncDirError', () => {
   // Pin the silent-vs-warn boundary that atomicWriteFile / createAtomicWriteStream
   // rely on for post-rename durability observability. The list shifted in
   // c9127b7c3 (EPERM/EACCES moved from silent → warn); a future maintainer
-  // re-adding either would silence a real ACL-drift regression on user machines.
-  it('silences EINVAL / EISDIR / ENOTSUP (filesystems that semantically reject dir fsync)', () => {
-    expect(shouldSilenceFsyncDirError('EINVAL')).toBe(true)
-    expect(shouldSilenceFsyncDirError('EISDIR')).toBe(true)
-    expect(shouldSilenceFsyncDirError('ENOTSUP')).toBe(true)
+  // re-adding either (outside the win32 exception below) would silence a real
+  // ACL-drift regression on user machines.
+  it('silences EINVAL / EISDIR / ENOTSUP on any platform (filesystems that semantically reject dir fsync)', () => {
+    for (const platform of ['win32', 'linux', 'darwin'] as const) {
+      expect(shouldSilenceFsyncDirError('EINVAL', platform)).toBe(true)
+      expect(shouldSilenceFsyncDirError('EISDIR', platform)).toBe(true)
+      expect(shouldSilenceFsyncDirError('ENOTSUP', platform)).toBe(true)
+    }
   })
 
-  it('does NOT silence permission errnos (EPERM / EACCES) — real ACL/sandbox regressions', () => {
-    expect(shouldSilenceFsyncDirError('EPERM')).toBe(false)
-    expect(shouldSilenceFsyncDirError('EACCES')).toBe(false)
+  it('silences EPERM on win32 only — libuv rejects fsync on a directory handle there (unsupported, not ACL drift)', () => {
+    expect(shouldSilenceFsyncDirError('EPERM', 'win32')).toBe(true)
+    expect(shouldSilenceFsyncDirError('EPERM', 'linux')).toBe(false)
+    expect(shouldSilenceFsyncDirError('EPERM', 'darwin')).toBe(false)
+  })
+
+  it('does NOT silence EACCES on any platform — real ACL/sandbox regressions', () => {
+    for (const platform of ['win32', 'linux', 'darwin'] as const) {
+      expect(shouldSilenceFsyncDirError('EACCES', platform)).toBe(false)
+    }
   })
 
   it('does NOT silence real IO errnos (EIO / ENOSPC / others)', () => {
-    expect(shouldSilenceFsyncDirError('EIO')).toBe(false)
-    expect(shouldSilenceFsyncDirError('ENOSPC')).toBe(false)
-    expect(shouldSilenceFsyncDirError('ENOENT')).toBe(false)
-    expect(shouldSilenceFsyncDirError(undefined)).toBe(false)
+    for (const platform of ['win32', 'linux', 'darwin'] as const) {
+      expect(shouldSilenceFsyncDirError('EIO', platform)).toBe(false)
+      expect(shouldSilenceFsyncDirError('ENOSPC', platform)).toBe(false)
+      expect(shouldSilenceFsyncDirError('ENOENT', platform)).toBe(false)
+      expect(shouldSilenceFsyncDirError(undefined, platform)).toBe(false)
+    }
   })
 })
 

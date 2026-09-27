@@ -109,6 +109,14 @@ describe('move (EXDEV cross-device fallback)', () => {
     const dest = path.join(tmp, 'dest.txt')
     await writeFile(src, 'payload')
     mockRename.mockRejectedValueOnce(makeErrnoErr('EXDEV', 'cross-device link'))
+    // Windows cannot fsync a directory handle (the real sync() fails with EPERM,
+    // which the product classifier intentionally does NOT silence). Inject a
+    // silenced EINVAL on the dir-open so this test pins "clean unlink is silent"
+    // rather than the host FS's directory-fsync support.
+    mockOpen.mockImplementation(async (p, flags) => {
+      if (flags === 'r' && p === tmp) throw makeErrnoErr('EINVAL', 'invalid argument')
+      return actualOpen(p as string, flags as never)
+    })
 
     await fsMove(src as AbsoluteFilePath, dest as AbsoluteFilePath)
 
@@ -131,6 +139,12 @@ describe('move (EXDEV cross-device fallback)', () => {
     await writeFile(src, 'payload')
     mockRename.mockRejectedValueOnce(makeErrnoErr('EXDEV', 'cross-device link'))
     mockUnlink.mockRejectedValueOnce(makeErrnoErr('ENOENT', 'no such file'))
+    // Same platform shim as the clean-unlink test above: silence the Windows
+    // EPERM dir-fsync so only the unlink path can produce a warn here.
+    mockOpen.mockImplementation(async (p, flags) => {
+      if (flags === 'r' && p === tmp) throw makeErrnoErr('EINVAL', 'invalid argument')
+      return actualOpen(p as string, flags as never)
+    })
 
     await fsMove(src as AbsoluteFilePath, dest as AbsoluteFilePath)
 
@@ -286,7 +300,7 @@ describe('fsyncDirectoryOf (end-to-end warn observability via atomicWriteFile)',
     vi.restoreAllMocks()
   })
 
-  it('warn-logs when fsync(dir) fails with a non-silenced errno (EPERM)', async () => {
+  it('EPERM follows the platform contract: warn on POSIX, silent on win32 (libuv rejects dir fsync)', async () => {
     // Inject EPERM on the directory open call (flags === 'r'). The tmp file
     // open call (flags === 'w') still passes through, so the rename succeeds
     // and atomicWriteFile resolves — fsyncDirectoryOf is best-effort.
@@ -302,14 +316,20 @@ describe('fsyncDirectoryOf (end-to-end warn observability via atomicWriteFile)',
     await atomicWriteFile(target as AbsoluteFilePath, 'payload')
 
     expect(await readFile(target, 'utf-8')).toBe('payload')
-    expect(mockLoggerWarn).toHaveBeenCalledWith(
-      expect.stringContaining('fsync(dir) failed'),
-      expect.objectContaining({
-        target,
-        code: 'EPERM',
-        err: fsyncErr
-      })
-    )
+    if (process.platform === 'win32') {
+      // Windows surfaces dir-fsync rejection as EPERM (libuv) — semantically
+      // "unsupported", so the classifier silences it there.
+      expect(mockLoggerWarn).not.toHaveBeenCalled()
+    } else {
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('fsync(dir) failed'),
+        expect.objectContaining({
+          target,
+          code: 'EPERM',
+          err: fsyncErr
+        })
+      )
+    }
   })
 
   it('stays silent when fsync(dir) fails with a silenced errno (EINVAL: FS rejects dir fsync)', async () => {

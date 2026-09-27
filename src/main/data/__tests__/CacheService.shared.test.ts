@@ -15,6 +15,8 @@
  *  - boundaries: the renderer-origin relay path and onStop stay outside the
  *    unified eviction outlet (no double broadcast, no teardown broadcast).
  */
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { CacheSyncMessage } from '@shared/data/cache/cacheTypes'
 import { IpcChannel } from '@shared/IpcChannel'
 import type { IpcMainEvent } from 'electron'
@@ -75,9 +77,11 @@ const PROGRESS_KEY = 'jobs.progress.job-1' as const
 
 // Trusted sender shape for the in-handler source-trust gate (validateSender);
 // the global application mock resolves getPath('app.root') to '/mock/app.root'.
+// The url is built via pathToFileURL so validateSender's fileURLToPath round-trip
+// (path.relative against the app root) stays trusted on both posix and win32.
 const trustedEvent = {
   sender: { getType: () => 'window' },
-  senderFrame: { url: 'file:///mock/app.root/index.html', parent: null }
+  senderFrame: { url: pathToFileURL(join('/mock/app.root', 'index.html')).href, parent: null }
 } as unknown as IpcMainEvent
 
 const BASE = 1_000_000

@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
@@ -190,8 +192,11 @@ describe('getNormalizedExecutablePath', () => {
     stubBootConfig()
     stubFs()
     const { getNormalizedExecutablePath } = await loadModule()
-    // path.join is globally mocked to args.join('/'); path.dirname is real.
-    expect(getNormalizedExecutablePath()).toBe('/home/alice/Applications/cherry-studio.appimage')
+    // node:path is the real implementation (main.setup.ts passes it through);
+    // mirror the product's join call so the assertion is separator-agnostic.
+    expect(getNormalizedExecutablePath()).toBe(
+      path.join(path.dirname('/home/alice/Applications/CherryStudio-1.0.0.AppImage'), 'cherry-studio.appimage')
+    )
   })
 
   it('Windows non-portable: returns app.getPath("exe") verbatim', async () => {
@@ -210,8 +215,10 @@ describe('getNormalizedExecutablePath', () => {
     stubBootConfig()
     stubFs()
     const { getNormalizedExecutablePath } = await loadModule()
-    // path.join is globally mocked to args.join('/').
-    expect(getNormalizedExecutablePath()).toBe('D:\\PortableApps\\CherryStudio/cherry-studio-portable.exe')
+    // node:path is the real implementation; mirror the product's join call.
+    expect(getNormalizedExecutablePath()).toBe(
+      path.join('D:\\PortableApps\\CherryStudio', 'cherry-studio-portable.exe')
+    )
   })
 })
 
@@ -384,7 +391,7 @@ describe('resolveUserDataLocation', () => {
       stubFs()
       const { resolveUserDataLocation } = await loadModule()
       resolveUserDataLocation()
-      expect(setPathMock).toHaveBeenCalledWith('userData', 'D:\\PortableApps\\CherryStudio/data')
+      expect(setPathMock).toHaveBeenCalledWith('userData', path.join('D:\\PortableApps\\CherryStudio', 'data'))
       expect(setPathMock).toHaveBeenCalledTimes(1)
     })
 
@@ -405,7 +412,9 @@ describe('resolveUserDataLocation', () => {
       // Key matches the *normalized* path, not raw exe.
       stubBootConfig({
         'app.user_data_path': {
-          '/home/alice/Apps/cherry-studio.appimage': '/home/alice/cherry-data'
+          // Key mirrors getNormalizedExecutablePath(): path.join(dirname(APPIMAGE), ...).
+          [path.join(path.dirname('/home/alice/Apps/CherryStudio-1.0.0.AppImage'), 'cherry-studio.appimage')]:
+            '/home/alice/cherry-data'
         }
       })
       stubFs({ existsSyncImpl: () => true, accessSyncImpl: () => undefined })
@@ -420,7 +429,8 @@ describe('resolveUserDataLocation', () => {
       stubElectron({ exePath: 'D:\\PortableApps\\CherryStudio\\Cherry Studio.exe' })
       stubBootConfig({
         'app.user_data_path': {
-          'D:\\PortableApps\\CherryStudio/cherry-studio-portable.exe': 'D:\\Data\\Cherry'
+          // Key mirrors getNormalizedExecutablePath(): path.join(PORTABLE_EXECUTABLE_DIR, ...).
+          [path.join('D:\\PortableApps\\CherryStudio', 'cherry-studio-portable.exe')]: 'D:\\Data\\Cherry'
         }
       })
       stubFs({ existsSyncImpl: () => true, accessSyncImpl: () => undefined })

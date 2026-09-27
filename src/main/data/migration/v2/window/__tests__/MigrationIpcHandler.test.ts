@@ -1,5 +1,6 @@
 import { application } from '@application'
 import { MigrationIpcChannels, type MigrationProgress, type MigrationResult } from '@shared/data/migration/v2/types'
+import path from 'node:path'
 import { dialog, ipcMain, type IpcMainInvokeEvent, shell } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -382,14 +383,19 @@ describe('MigrationIpcHandler', () => {
       await invoke(MigrationIpcChannels.WriteExportFile, '/export', 'localStorage', '[]')
 
       expect(fsMock.mkdir).toHaveBeenCalledWith('/export', { recursive: true })
-      expect(fsMock.writeFile).toHaveBeenCalledWith('/export/localStorage.json', '[]', 'utf-8')
+      // The handler builds the file path via path.join(exportPath, …).
+      expect(fsMock.writeFile).toHaveBeenCalledWith(path.join('/export', 'localStorage.json'), '[]', 'utf-8')
       expect(fsMock.appendFile).not.toHaveBeenCalled()
     })
 
     it('appends an export chunk when requested', async () => {
       await invoke(MigrationIpcChannels.WriteExportFile, '/export', 'message_blocks', '{"id":"b1"}', 'append')
 
-      expect(fsMock.appendFile).toHaveBeenCalledWith('/export/message_blocks.json', '{"id":"b1"}', 'utf-8')
+      expect(fsMock.appendFile).toHaveBeenCalledWith(
+        path.join('/export', 'message_blocks.json'),
+        '{"id":"b1"}',
+        'utf-8'
+      )
       expect(fsMock.writeFile).not.toHaveBeenCalled()
     })
 

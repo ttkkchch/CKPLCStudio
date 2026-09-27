@@ -7,6 +7,8 @@
  * covered in core/security/__tests__/validateSender.test.ts — here we verify the
  * wiring: rejection short-circuits, trusted requests pass through.
  */
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { IpcChannel } from '@shared/IpcChannel'
 import { ipcMain } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,18 +24,21 @@ vi.mock('@application', async () => {
 type IpcHandler = (event: any, payload: any) => Promise<any>
 
 // The unified application mock resolves getPath('app.root') to '/mock/app.root'.
+// The url is built via pathToFileURL so validateSender's fileURLToPath round-trip
+// (path.relative against the app root) stays trusted on both posix and win32.
+const appRendererUrl = pathToFileURL(join('/mock/app.root', 'index.html')).href
 const trustedEvent = {
   sender: { getType: () => 'window' },
-  senderFrame: { url: 'file:///mock/app.root/index.html', parent: null }
+  senderFrame: { url: appRendererUrl, parent: null }
 } as any
 const untrustedEvents = {
   webview: {
     sender: { getType: () => 'webview' },
-    senderFrame: { url: 'file:///mock/app.root/index.html', parent: null }
+    senderFrame: { url: appRendererUrl, parent: null }
   },
   'sub-frame': {
     sender: { getType: () => 'window' },
-    senderFrame: { url: 'file:///mock/app.root/index.html', parent: {} }
+    senderFrame: { url: appRendererUrl, parent: {} }
   },
   'remote origin': {
     sender: { getType: () => 'window' },

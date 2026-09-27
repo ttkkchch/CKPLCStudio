@@ -28,6 +28,10 @@ export const USER_DATA_WIPE = [
   'cherrystudio.sqlite',
   'cherrystudio.sqlite-wal',
   'cherrystudio.sqlite-shm',
+  // Rebranded main database (pathRegistry 'app.database.file') plus sidecars.
+  'plcstudio.sqlite',
+  'plcstudio.sqlite-wal',
+  'plcstudio.sqlite-shm',
   'Data',
   'Data.restore',
   'IndexedDB.restore',

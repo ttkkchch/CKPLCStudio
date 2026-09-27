@@ -339,7 +339,8 @@ describe('prepareClaudeCodeWorkspaceDirectory', () => {
 
     await prepareClaudeCodeWorkspaceDirectory(makeSession(workspacePath, 'system'))
 
-    expect(mockMkdir).toHaveBeenCalledWith(workspacePath, { recursive: true })
+    // Product resolves the workspace path before delegating creation.
+    expect(mockMkdir).toHaveBeenCalledWith(path.resolve(workspacePath), { recursive: true })
   })
 
   it('rejects system workspace paths outside the managed root', async () => {
@@ -353,9 +354,11 @@ describe('prepareClaudeCodeWorkspaceDirectory', () => {
 
   it('rejects system workspace symlinks that resolve outside the managed root', async () => {
     const workspacePath = '/tmp/managed-workspaces/sess-link'
+    // Product resolves paths before calling realpath, so compare resolved shapes.
+    const managedRoot = path.resolve('/tmp/managed-workspaces')
     mockRealpath.mockImplementation(async (targetPath: string) => {
-      if (targetPath === '/tmp/managed-workspaces') return '/tmp/managed-workspaces'
-      if (targetPath === workspacePath) return '/tmp/outside-workspace'
+      if (targetPath === managedRoot) return managedRoot
+      if (targetPath === path.resolve(workspacePath)) return path.resolve('/tmp/outside-workspace')
       return targetPath
     })
 

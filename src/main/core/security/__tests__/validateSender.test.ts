@@ -1,3 +1,6 @@
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
 import type { IpcMainInvokeEvent } from 'electron'
 import { describe, expect, it } from 'vitest'
 
@@ -8,7 +11,11 @@ const APP_ROOT = '/Applications/CherryStudio.app/Contents/Resources/app.asar'
 
 describe('isAppRendererUrl', () => {
   it('trusts a packaged app page whose file path is inside the app root', () => {
-    expect(isAppRendererUrl(`file://${APP_ROOT}/out/renderer/index.html`, null, APP_ROOT)).toBe(true)
+    // Build the URL with pathToFileURL so it is a well-formed file URL on every
+    // platform (drive-less `file:///...` strings are invalid on win32).
+    expect(
+      isAppRendererUrl(pathToFileURL(path.join(APP_ROOT, 'out/renderer/index.html')).href, null, APP_ROOT)
+    ).toBe(true)
   })
 
   it('rejects a file:// page outside the app root (downloaded/exported HTML)', () => {
@@ -75,7 +82,7 @@ describe('validateSender', () => {
   })
 
   it('accepts a top-level window loading a packaged file:// page inside the app root', () => {
-    expect(validateSender(evt('window', 'file:///app/index.html'), APP_ROOT)).toBe(true)
+    expect(validateSender(evt('window', pathToFileURL(path.join('/app', 'index.html')).href), APP_ROOT)).toBe(true)
   })
 
   it('rejects a sub-frame (iframe) even when its url is an app file:// page', () => {

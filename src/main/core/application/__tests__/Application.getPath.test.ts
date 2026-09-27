@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 
 // Type-only import used to give vi.importActual a generic argument that
 // satisfies @typescript-eslint/consistent-type-imports (which forbids
@@ -24,10 +25,9 @@ vi.mock('node:fs', async () => {
 // `shouldAutoEnsure` and crashes, defeating the test.
 //
 // The mocked pathMap covers every key the lazy-auto-ensure tests touch.
-// All paths use forward slashes — the global node:path mock joins with
-// '/' (see tests/main.setup.ts:185), and node:path.dirname is left at
-// the actual implementation, which handles forward slashes on every
-// platform.
+// All paths use forward slashes — main.setup.ts passes node:path through to
+// the real implementation, whose dirname/join handle forward slashes on
+// every platform.
 vi.mock('@main/core/paths/pathRegistry', async () => {
   const actual = await vi.importActual<typeof PathRegistryModule>('@main/core/paths/pathRegistry')
   return {
@@ -79,8 +79,9 @@ describe('Application.getPath', () => {
     })
 
     it('joins a single-segment filename to the registered path', () => {
-      // node:path.join is mocked in main.setup.ts to use '/' separator
-      expect(app.getPath('feature.files.data', 'valid.txt')).toBe('/mock/userData/Data/Files/valid.txt')
+      // node:path is the real implementation (main.setup.ts passes it through),
+      // so build the expectation with path.join to stay host-separator agnostic.
+      expect(app.getPath('feature.files.data', 'valid.txt')).toBe(path.join('/mock/userData/Data/Files', 'valid.txt'))
     })
   })
 

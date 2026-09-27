@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import type * as LifecycleModule from '@main/core/lifecycle'
 import { getDependencies, getPhase } from '@main/core/lifecycle/decorators'
 import { Phase } from '@main/core/lifecycle/types'
@@ -93,7 +95,7 @@ const {
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
-  return mockApplicationFactory({
+  const mod = mockApplicationFactory({
     FileProcessingService: {
       startJob: fileProcessingStartJobMock
     },
@@ -113,6 +115,15 @@ vi.mock('@application', async () => {
       embedMany: aiEmbedManyMock
     }
   } as Parameters<typeof mockApplicationFactory>[0])
+  // '/mock/…' has no drive letter, so it is not an absolute path on win32 once
+  // the product joins it (AbsoluteFilePathSchema rejects it) — resolve it the
+  // same way production roots are resolved.
+  const knowledgeDataDir = path.resolve('/mock', 'feature.knowledgebase.data')
+  mod.application.getPath.mockImplementation((key: string, filename?: string) => {
+    const base = key === 'feature.knowledgebase.data' ? knowledgeDataDir : `/mock/${key}`
+    return filename ? path.join(base, filename) : base
+  })
+  return mod
 })
 
 vi.mock('@logger', () => ({
@@ -190,6 +201,12 @@ vi.mock('../utils/storage/pathStorage', async () => {
 })
 
 const { KnowledgeService, KNOWLEDGE_TREE_MAX_NODES } = await import('../KnowledgeService')
+
+// Mirrors the base material roots the '@application' mock yields (resolved →
+// valid absolute path on win32 too).
+const KNOWLEDGE_DATA_DIR = path.resolve('/mock', 'feature.knowledgebase.data')
+const KB1_RAW_DIR = path.join(KNOWLEDGE_DATA_DIR, 'kb-1', 'raw')
+const SOURCE_KB_RAW_DIR = path.join(KNOWLEDGE_DATA_DIR, 'source-kb', 'raw')
 
 const NOTE_ITEM_ID = '0198f3f2-7d1a-7abc-8def-123456789abc'
 const DELETING_NOTE_ITEM_ID = '0198f3f2-7d1b-7abc-8def-123456789abc'
@@ -861,8 +878,8 @@ describe('KnowledgeService', () => {
 
     // Both the source file and its already-processed artifact are copied into the restored base.
     expect(copyFileIntoKnowledgeBaseAtMock.mock.calls).toEqual([
-      ['restored-kb', '/mock/feature.knowledgebase.data/source-kb/raw/report.pdf', 'report.pdf'],
-      ['restored-kb', '/mock/feature.knowledgebase.data/source-kb/raw/report.md', 'report.md']
+      ['restored-kb', path.join(SOURCE_KB_RAW_DIR, 'report.pdf'), 'report.pdf'],
+      ['restored-kb', path.join(SOURCE_KB_RAW_DIR, 'report.md'), 'report.md']
     ])
     // The created item carries the artifact path.
     expect(knowledgeItemCreateMock).toHaveBeenCalledWith(
@@ -905,7 +922,7 @@ describe('KnowledgeService', () => {
     // The snapshot markdown is copied into the restored base under the same name.
     expect(copyFileIntoKnowledgeBaseAtMock).toHaveBeenCalledWith(
       'restored-kb',
-      '/mock/feature.knowledgebase.data/source-kb/raw/example-page.md',
+      path.join(SOURCE_KB_RAW_DIR, 'example-page.md'),
       'example-page.md'
     )
     // The created url item is pinned to the copied snapshot so first index reads it offline.
@@ -1085,8 +1102,8 @@ describe('KnowledgeService', () => {
     expect(fileProcessingStartJobMock).toHaveBeenCalledWith(
       {
         feature: 'document_to_markdown',
-        file: { kind: 'path', path: '/mock/feature.knowledgebase.data/kb-1/raw/source.pdf' },
-        output: { kind: 'path', path: '/mock/feature.knowledgebase.data/kb-1/raw/source.md' },
+        file: { kind: 'path', path: path.join(KB1_RAW_DIR, 'source.pdf') },
+        output: { kind: 'path', path: path.join(KB1_RAW_DIR, 'source.md') },
         context: { dataId: 'file-1' },
         processorId: 'doc2x'
       },
@@ -1371,8 +1388,8 @@ describe('KnowledgeService', () => {
     expect(fileProcessingStartJobMock).toHaveBeenCalledWith(
       {
         feature: 'document_to_markdown',
-        file: { kind: 'path', path: '/mock/feature.knowledgebase.data/kb-1/raw/source.pdf' },
-        output: { kind: 'path', path: '/mock/feature.knowledgebase.data/kb-1/raw/source.md' },
+        file: { kind: 'path', path: path.join(KB1_RAW_DIR, 'source.pdf') },
+        output: { kind: 'path', path: path.join(KB1_RAW_DIR, 'source.md') },
         context: { dataId: 'file-1' },
         processorId: 'doc2x'
       },
@@ -1809,7 +1826,7 @@ describe('KnowledgeService', () => {
       }
     })
 
-    expect(service.getFilePath('file-1')).toBe('/mock/feature.knowledgebase.data/kb-1/raw/stored-report.pdf')
+    expect(service.getFilePath('file-1')).toBe(path.join(KB1_RAW_DIR, 'stored-report.pdf'))
   })
 
   it('resolves a URL preview to the captured knowledge snapshot', () => {
@@ -1830,7 +1847,7 @@ describe('KnowledgeService', () => {
       updatedAt: '2026-04-08T00:00:00.000Z'
     })
 
-    expect(service.getFilePath('url-1')).toBe('/mock/feature.knowledgebase.data/kb-1/raw/Product Docs.md')
+    expect(service.getFilePath('url-1')).toBe(path.join(KB1_RAW_DIR, 'Product Docs.md'))
   })
 
   it('rejects URL preview path resolution before a snapshot is captured', () => {

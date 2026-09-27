@@ -210,9 +210,9 @@ describe('main web search API providers', () => {
           },
           "headers": {
             "content-type": "application/json",
-            "http-referer": "https://cherry-ai.com",
+            "http-referer": "https://example.com/ckplcstudio",
             "x-api-key": "exa-key",
-            "x-title": "Cherry Studio",
+            "x-title": "CKPLCStudio",
           },
           "method": "POST",
           "url": "https://api.exa.ai/search",
@@ -265,8 +265,8 @@ describe('main web search API providers', () => {
           "headers": {
             "authorization": "Bearer tavily-key",
             "content-type": "application/json",
-            "http-referer": "https://cherry-ai.com",
-            "x-title": "Cherry Studio",
+            "http-referer": "https://example.com/ckplcstudio",
+            "x-title": "CKPLCStudio",
           },
           "method": "POST",
           "url": "https://api.tavily.com/search",
@@ -373,9 +373,9 @@ describe('main web search API providers', () => {
           "headers": {
             "accept": "application/json",
             "authorization": "Bearer jina-key",
-            "http-referer": "https://cherry-ai.com",
+            "http-referer": "https://example.com/ckplcstudio",
             "x-retain-images": "none",
-            "x-title": "Cherry Studio",
+            "x-title": "CKPLCStudio",
           },
           "method": "GET",
           "url": "https://r.jina.ai/https://example.com/article",
@@ -630,8 +630,8 @@ describe('main web search API providers', () => {
           "body": null,
           "headers": {
             "authorization": "Basic YWxpY2U6c2VjcmV0",
-            "http-referer": "https://cherry-ai.com",
-            "x-title": "Cherry Studio",
+            "http-referer": "https://example.com/ckplcstudio",
+            "x-title": "CKPLCStudio",
           },
           "method": "GET",
           "url": "https://searx.example/search?q=hello&language=auto&format=json&engines=google%2Cbing",
@@ -666,8 +666,8 @@ describe('main web search API providers', () => {
         "configRequest": {
           "body": null,
           "headers": {
-            "http-referer": "https://cherry-ai.com",
-            "x-title": "Cherry Studio",
+            "http-referer": "https://example.com/ckplcstudio",
+            "x-title": "CKPLCStudio",
           },
           "method": "GET",
           "url": "https://searx.example/config",
@@ -675,8 +675,8 @@ describe('main web search API providers', () => {
         "searchRequest": {
           "body": null,
           "headers": {
-            "http-referer": "https://cherry-ai.com",
-            "x-title": "Cherry Studio",
+            "http-referer": "https://example.com/ckplcstudio",
+            "x-title": "CKPLCStudio",
           },
           "method": "GET",
           "url": "https://searx.example/search?q=hello&language=auto&format=json&engines=duckduckgo",
@@ -932,8 +932,8 @@ describe('main web search API providers', () => {
           "headers": {
             "authorization": "Bearer bocha-key",
             "content-type": "application/json",
-            "http-referer": "https://cherry-ai.com",
-            "x-title": "Cherry Studio",
+            "http-referer": "https://example.com/ckplcstudio",
+            "x-title": "CKPLCStudio",
           },
           "method": "POST",
           "url": "https://api.bochaai.com/v1/web-search",
@@ -1011,8 +1011,8 @@ describe('main web search API providers', () => {
           "headers": {
             "authorization": "Bearer querit-key",
             "content-type": "application/json",
-            "http-referer": "https://cherry-ai.com",
-            "x-title": "Cherry Studio",
+            "http-referer": "https://example.com/ckplcstudio",
+            "x-title": "CKPLCStudio",
           },
           "method": "POST",
           "url": "https://api.querit.ai/v1/search",
@@ -1066,8 +1066,8 @@ describe('main web search API providers', () => {
           "headers": {
             "authorization": "Bearer zhipu-key",
             "content-type": "application/json",
-            "http-referer": "https://cherry-ai.com",
-            "x-title": "Cherry Studio",
+            "http-referer": "https://example.com/ckplcstudio",
+            "x-title": "CKPLCStudio",
           },
           "method": "POST",
           "url": "https://open.bigmodel.cn/api/paas/v4/tools",
@@ -1184,8 +1184,8 @@ describe('main web search API providers', () => {
           "headers": {
             "accept": "application/json, text/event-stream",
             "content-type": "application/json",
-            "http-referer": "https://cherry-ai.com",
-            "x-title": "Cherry Studio",
+            "http-referer": "https://example.com/ckplcstudio",
+            "x-title": "CKPLCStudio",
           },
           "method": "POST",
           "url": "https://mcp.exa.ai/mcp",
@@ -1451,8 +1451,8 @@ describe('main web search API providers', () => {
             "headers": {
               "authorization": "Bearer firecrawl-key",
               "content-type": "application/json",
-              "http-referer": "https://cherry-ai.com",
-              "x-title": "Cherry Studio",
+              "http-referer": "https://example.com/ckplcstudio",
+              "x-title": "CKPLCStudio",
             },
             "method": "POST",
             "url": "https://api.firecrawl.example/v2/search",

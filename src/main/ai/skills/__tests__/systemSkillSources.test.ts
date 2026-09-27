@@ -26,9 +26,10 @@ describe('buildSystemSkillSources', () => {
       }).map((source) => [source.id, source.directoryPath])
     )
 
-    expect(byId.get('claude-code')).toBe(path.join('/configs/claude', 'skills'))
-    expect(byId.get('codex')).toBe(path.join('/configs/codex', 'skills'))
-    expect(byId.get('opencode')).toBe(path.join('/configs/xdg', 'opencode', 'skills'))
-    expect(byId.get('agents-xdg')).toBe(path.join('/configs/xdg', 'agents', 'skills'))
+    // Product code resolves configured overrides with path.resolve(home, value) before joining.
+    expect(byId.get('claude-code')).toBe(path.join(path.resolve(home, '/configs/claude'), 'skills'))
+    expect(byId.get('codex')).toBe(path.join(path.resolve(home, '/configs/codex'), 'skills'))
+    expect(byId.get('opencode')).toBe(path.join(path.resolve(home, '/configs/xdg'), 'opencode', 'skills'))
+    expect(byId.get('agents-xdg')).toBe(path.join(path.resolve(home, '/configs/xdg'), 'agents', 'skills'))
   })
 })

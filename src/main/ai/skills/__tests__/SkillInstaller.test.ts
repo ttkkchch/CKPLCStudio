@@ -76,13 +76,13 @@ describe('SkillInstaller', () => {
 
       await installer.install('/tmp/my-skill', '/global-skills/my-skill')
 
-      expect(mockFsRename).toHaveBeenNthCalledWith(1, '/global-skills/my-skill', '/global-skills/.my-skill.bak')
+      expect(mockFsRename).toHaveBeenNthCalledWith(1, '/global-skills/my-skill', path.join('/global-skills', '.my-skill.bak'))
       expect(mockFsRename).toHaveBeenNthCalledWith(
         2,
-        '/global-skills/.my-skill.bak',
-        '/global-skills/.my-skill.cleanup'
+        path.join('/global-skills', '.my-skill.bak'),
+        path.join('/global-skills', '.my-skill.cleanup')
       )
-      expect(mockDeleteDirectoryRecursive).toHaveBeenCalledWith('/global-skills/.my-skill.cleanup')
+      expect(mockDeleteDirectoryRecursive).toHaveBeenCalledWith(path.join('/global-skills', '.my-skill.cleanup'))
     })
 
     it('keeps the verified replacement when committed-backup cleanup is interrupted', async () => {
@@ -119,7 +119,7 @@ describe('SkillInstaller', () => {
       await expect(installer.install('/tmp/my-skill', '/global-skills/my-skill')).rejects.toThrow('SKILL.md not found')
 
       expect(mockDeleteDirectoryRecursive).toHaveBeenCalledWith('/global-skills/my-skill')
-      expect(mockFsRename).toHaveBeenNthCalledWith(2, '/global-skills/.my-skill.bak', '/global-skills/my-skill')
+      expect(mockFsRename).toHaveBeenNthCalledWith(2, path.join('/global-skills', '.my-skill.bak'), '/global-skills/my-skill')
     })
 
     it('restores the previous skill when the copied descriptor differs from the source', async () => {
@@ -135,25 +135,28 @@ describe('SkillInstaller', () => {
       )
 
       expect(mockDeleteDirectoryRecursive).toHaveBeenCalledWith('/global-skills/my-skill')
-      expect(mockFsRename).toHaveBeenNthCalledWith(2, '/global-skills/.my-skill.bak', '/global-skills/my-skill')
+      expect(mockFsRename).toHaveBeenNthCalledWith(2, path.join('/global-skills', '.my-skill.bak'), '/global-skills/my-skill')
     })
   })
 
   it('hashes scripts and assets in addition to SKILL.md', async () => {
+    // Product code joins paths with path.join, which uses backslashes on win32.
+    // Normalize before matching so the mock predicates are separator-agnostic.
+    const toPosix = (p: string) => p.split(path.sep).join('/')
     mockFsReaddir.mockImplementation(async (directory: string) => {
-      if (directory.endsWith('/scripts')) {
+      if (toPosix(directory).endsWith('/scripts')) {
         return [{ name: 'run.sh' }]
       }
       return [{ name: 'SKILL.md' }, { name: 'scripts' }]
     })
     mockFsLstat.mockImplementation(async (entryPath: string) => ({
       isSymbolicLink: () => false,
-      isDirectory: () => entryPath.endsWith('/scripts'),
-      isFile: () => !entryPath.endsWith('/scripts')
+      isDirectory: () => toPosix(entryPath).endsWith('/scripts'),
+      isFile: () => !toPosix(entryPath).endsWith('/scripts')
     }))
     mockFsReadFile.mockImplementation(async (filePath: string) => {
-      if (filePath.endsWith('/SKILL.md')) return Buffer.from('# same descriptor')
-      return Buffer.from(filePath.startsWith('/source/') ? 'complete script' : 'truncated script')
+      if (toPosix(filePath).endsWith('/SKILL.md')) return Buffer.from('# same descriptor')
+      return Buffer.from(toPosix(filePath).startsWith('/source/') ? 'complete script' : 'truncated script')
     })
     mockFindSkillMdPath.mockImplementation(async (directory: string) => path.join(directory, 'SKILL.md'))
 
@@ -174,7 +177,7 @@ describe('SkillInstaller', () => {
 
     await installer.recoverInterruptedInstalls('/global-skills')
 
-    expect(mockFsRename).toHaveBeenCalledWith('/global-skills/.first.bak', '/global-skills/first')
+    expect(mockFsRename).toHaveBeenCalledWith(path.join('/global-skills', '.first.bak'), path.join('/global-skills', 'first'))
   })
 
   it('cleans a committed backup without replacing the installed skill', async () => {
@@ -186,7 +189,7 @@ describe('SkillInstaller', () => {
 
     await installer.recoverInterruptedInstalls('/global-skills')
 
-    expect(mockDeleteDirectoryRecursive).toHaveBeenCalledWith('/global-skills/.first.cleanup')
+    expect(mockDeleteDirectoryRecursive).toHaveBeenCalledWith(path.join('/global-skills', '.first.cleanup'))
     expect(mockFsRename).not.toHaveBeenCalled()
   })
 })

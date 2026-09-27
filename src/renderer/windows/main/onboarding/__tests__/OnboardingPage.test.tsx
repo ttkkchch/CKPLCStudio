@@ -407,21 +407,20 @@ describe('OnboardingPage', () => {
     expect(MockUsePreferenceUtils.getPreferenceValue('app.privacy.data_collection.enabled')).toBe(false)
   })
 
-  it('starts CherryIN login without privacy acceptance and disables data collection', async () => {
+  it('opens the OpenAI Hub key step without privacy acceptance and disables data collection', async () => {
     MockUsePreferenceUtils.setPreferenceValue('app.privacy.policy_version', '')
-    oauthWithCherryInMock.mockImplementation(async (setKey: (keys: string) => Promise<void>) => {
-      await setKey('sk-one')
-      return 'sk-one'
-    })
     render(<OnboardingPage />)
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'onboarding.privacy.accept_policy' }))
     await waitFor(() =>
       expect(MockUsePreferenceUtils.getPreferenceValue('app.privacy.data_collection.enabled')).toBe(false)
     )
-    fireEvent.click(screen.getByRole('button', { name: 'onboarding.welcome.login_cherryin' }))
+    fireEvent.click(screen.getByRole('button', { name: 'onboarding.welcome.login_openai_hub' }))
 
-    await waitFor(() => expect(oauthWithCherryInMock).toHaveBeenCalledTimes(1))
+    // The welcome action now routes to the OpenAI Hub key-entry step.
+    await waitFor(() =>
+      expect(screen.getByLabelText('onboarding.openai_hub.api_key_placeholder')).toBeInTheDocument()
+    )
     expect(screen.queryByTestId('privacy-policy-dialog')).not.toBeInTheDocument()
     expect(MockUsePreferenceUtils.getPreferenceValue('app.privacy.policy_version')).toBe('')
     expect(MockUsePreferenceUtils.getPreferenceValue('app.privacy.data_collection.enabled')).toBe(false)
@@ -571,9 +570,9 @@ describe('OnboardingPage', () => {
   it('uses an elevated welcome layout with clear text hierarchy and intentional spacing', () => {
     render(<OnboardingPage />)
 
-    const logo = screen.getByRole('img', { name: 'Cherry Studio' })
+    const logo = screen.getByRole('img', { name: 'CKPLCStudio' })
     const welcomeContent = logo.parentElement
-    const primaryAction = screen.getByRole('button', { name: 'onboarding.welcome.login_cherryin' })
+    const primaryAction = screen.getByRole('button', { name: 'onboarding.welcome.login_openai_hub' })
     const secondaryAction = screen.getByRole('button', { name: 'onboarding.welcome.other_provider' })
 
     expect(welcomeContent?.parentElement).toHaveClass('pb-20')
@@ -582,32 +581,38 @@ describe('OnboardingPage', () => {
     expect(primaryAction.parentElement).toHaveClass('mt-8')
     expect(primaryAction).toHaveClass('rounded-xl')
     expect(secondaryAction).toHaveClass('rounded-xl')
-    expect(primaryAction.querySelector('svg')).toHaveClass('lucide-log-in')
+    expect(primaryAction.querySelector('svg')).toHaveClass('lucide-key-round')
     expect(screen.queryByText('onboarding.welcome.or_continue_with')).not.toBeInTheDocument()
     expect(screen.getByText('onboarding.welcome.setup_hint')).toHaveClass('mt-4')
   })
 
-  it('hides the login icon while loading and restores the action after ten seconds', async () => {
-    vi.useFakeTimers()
-    oauthWithCherryInMock.mockImplementation(() => new Promise<string>(() => {}))
+  it('disables the hub connect action while connecting and restores it afterwards', async () => {
+    let rejectConnect: ((error: Error) => void) | undefined
+    addApiKeyMock.mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectConnect = reject
+        })
+    )
     render(<OnboardingPage />)
 
-    const loginButton = screen.getByRole('button', { name: 'onboarding.welcome.login_cherryin' })
-    fireEvent.click(loginButton)
+    fireEvent.click(screen.getByRole('button', { name: 'onboarding.welcome.login_openai_hub' }))
+    const keyInput = await screen.findByLabelText('onboarding.openai_hub.api_key_placeholder')
+    fireEvent.change(keyInput, { target: { value: 'sk-one' } })
+    const connectButton = screen.getByRole('button', { name: 'onboarding.openai_hub.connect' })
+    fireEvent.click(connectButton)
 
-    expect(loginButton).toBeDisabled()
-    await act(() => vi.advanceTimersByTimeAsync(10))
-    expect(loginButton.querySelector('.lucide-log-in')).not.toBeInTheDocument()
+    // The global @cherrystudio/ui test mock maps loading to disabled without rendering a spinner.
+    expect(connectButton).toBeDisabled()
 
-    await act(() => vi.advanceTimersByTime(9_999))
-    expect(loginButton).toBeDisabled()
-
-    await act(() => vi.advanceTimersByTime(1))
-    expect(loginButton).toBeEnabled()
-    expect(loginButton.querySelector('.lucide-log-in')).toBeInTheDocument()
+    await act(async () => {
+      rejectConnect?.(new Error('connect failed'))
+    })
+    await waitFor(() => expect(connectButton).toBeEnabled())
+    expect(toastErrorMock).toHaveBeenCalledWith('onboarding.openai_hub.connect_failed')
   })
 
-  it('syncs CherryIN models before moving a fresh install to model selection', async () => {
+  it('syncs hub models before moving a fresh install to model selection', async () => {
     enabledProvidersMock.splice(0, enabledProvidersMock.length, { id: 'cherryai', isEnabled: true })
     enabledModelsMock.splice(0, enabledModelsMock.length, {
       id: 'cherryai::qwen',
@@ -617,33 +622,30 @@ describe('OnboardingPage', () => {
     selectedModelsMock.defaultModel = { id: 'cherryai::qwen', providerId: CHERRYAI_PROVIDER_ID }
     selectedModelsMock.quickModel = { id: 'cherryai::qwen', providerId: CHERRYAI_PROVIDER_ID }
     selectedModelsMock.translateModel = { id: 'cherryai::qwen', providerId: CHERRYAI_PROVIDER_ID }
-    oauthWithCherryInMock.mockImplementation(async (setKey: (keys: string) => Promise<void>) => {
-      await setKey('sk-one, sk-two')
-      return 'sk-one, sk-two'
-    })
 
     render(<OnboardingPage />)
 
-    fireEvent.click(screen.getByRole('button', { name: /onboarding\.welcome\.login_cherryin/ }))
+    fireEvent.click(screen.getByRole('button', { name: /onboarding\.welcome\.login_openai_hub/ }))
+    const keyInput = await screen.findByLabelText('onboarding.openai_hub.api_key_placeholder')
+    fireEvent.change(keyInput, { target: { value: 'sk-one' } })
+    fireEvent.click(screen.getByRole('button', { name: 'onboarding.openai_hub.connect' }))
 
     await waitFor(() => expect(screen.getByTestId('model-settings')).toBeInTheDocument())
-    expect(addApiKeyMock).toHaveBeenCalledWith('sk-one', 'OAuth')
-    expect(addApiKeyMock).toHaveBeenCalledWith('sk-two', 'OAuth')
+    expect(addApiKeyMock).toHaveBeenCalledWith('sk-one')
     expect(updateProviderMock).toHaveBeenCalledWith({ isEnabled: true })
     expect(syncProviderModelsMock).toHaveBeenCalledTimes(1)
-    expect(toastSuccessMock).toHaveBeenCalledWith('onboarding.toast.connected')
+    expect(toastSuccessMock).toHaveBeenCalledWith('onboarding.openai_hub.connected')
   })
 
-  it('returns to provider setup when CherryIN sync finds no enabled model', async () => {
+  it('returns to provider setup when hub sync finds no enabled model', async () => {
     syncProviderModelsMock.mockResolvedValue([])
-    oauthWithCherryInMock.mockImplementation(async (setKey: (keys: string) => Promise<void>) => {
-      await setKey('sk-one')
-      return 'sk-one'
-    })
 
     render(<OnboardingPage />)
 
-    fireEvent.click(screen.getByRole('button', { name: /onboarding\.welcome\.login_cherryin/ }))
+    fireEvent.click(screen.getByRole('button', { name: /onboarding\.welcome\.login_openai_hub/ }))
+    const keyInput = await screen.findByLabelText('onboarding.openai_hub.api_key_placeholder')
+    fireEvent.change(keyInput, { target: { value: 'sk-one' } })
+    fireEvent.click(screen.getByRole('button', { name: 'onboarding.openai_hub.connect' }))
 
     await waitFor(() => expect(syncProviderModelsMock).toHaveBeenCalledTimes(1))
     expect(screen.getByTestId('provider-settings')).toBeInTheDocument()

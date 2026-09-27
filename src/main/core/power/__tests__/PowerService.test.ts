@@ -1,3 +1,5 @@
+import Module from 'node:module'
+
 import { application } from '@application'
 import { BaseService } from '@main/core/lifecycle'
 import { MockMainPreferenceServiceUtils } from '@test-mocks/main/PreferenceService'
@@ -101,6 +103,21 @@ vi.mock('electron', () => ({
 vi.mock('@paymoapp/electron-shutdown-handler', () => ({
   default: { on: shutdownHandlerOn, setWindowHandle, releaseShutdown, blockShutdown }
 }))
+
+// The product loads the native addon via require() on purpose (a missing binary
+// must degrade gracefully — see PowerService.initWindowsShutdownHandler). The
+// runner provides a real require() in module scope, which vi.mock cannot
+// intercept, so hook Module._load and resolve the addon id to the hoisted mocks.
+const shutdownHandlerMock = { on: shutdownHandlerOn, setWindowHandle, releaseShutdown, blockShutdown }
+// Module._load is a private Node API that exists at runtime but is not typed.
+const moduleWithLoad = Module as unknown as {
+  _load: (request: string, parent: unknown, isMain: boolean) => unknown
+}
+const originalModuleLoad = moduleWithLoad._load.bind(Module)
+moduleWithLoad._load = function mockedModuleLoad(request: string, parent: unknown, isMain: boolean) {
+  if (request === '@paymoapp/electron-shutdown-handler') return shutdownHandlerMock
+  return originalModuleLoad(request, parent, isMain)
+}
 
 // Imported after the mocks are declared.
 const { PowerService } = await import('../PowerService')

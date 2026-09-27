@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import type * as FsUtils from '@main/utils/file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,7 +10,16 @@ const { loadDataMock, readFileMock } = vi.hoisted(() => ({
 
 vi.mock('@application', async () => {
   const { mockApplicationFactory } = await import('@test-mocks/main/application')
-  return mockApplicationFactory()
+  const mod = mockApplicationFactory()
+  // '/mock/…' has no drive letter, so it is not an absolute path on win32 once
+  // the product joins it (AbsoluteFilePathSchema rejects it) — resolve it the
+  // same way production roots are resolved.
+  const knowledgeDataDir = path.resolve('/mock', 'feature.knowledgebase.data')
+  mod.application.getPath.mockImplementation((key: string, filename?: string) => {
+    const base = key === 'feature.knowledgebase.data' ? knowledgeDataDir : `/mock/${key}`
+    return filename ? path.join(base, filename) : base
+  })
+  return mod
 })
 
 vi.mock('@main/utils/legacyFile', () => ({
@@ -49,6 +60,11 @@ vi.mock('../files/EpubReader', () => ({ EpubReader: class MockEpubReader {} }))
 const { loadFileDocuments } = await import('../KnowledgeFileReader')
 const { loadSnapshotDocuments } = await import('../KnowledgeSnapshotReader')
 
+// Mirrors the base dir the '@application' mock returns for
+// 'feature.knowledgebase.data' (resolved → valid absolute path on win32 too).
+const KNOWLEDGE_DATA_DIR = path.resolve('/mock', 'feature.knowledgebase.data')
+const KB1_DIR = path.join(KNOWLEDGE_DATA_DIR, 'kb-1')
+
 describe('knowledge reader metadata', () => {
   beforeEach(() => {
     loadDataMock.mockClear()
@@ -71,7 +87,7 @@ describe('knowledge reader metadata', () => {
       updatedAt: '2026-04-08T00:00:00.000Z'
     })
 
-    expect(loadDataMock).toHaveBeenCalledWith('/mock/feature.knowledgebase.data/kb-1/raw/original.txt')
+    expect(loadDataMock).toHaveBeenCalledWith(path.join(KB1_DIR, 'raw', 'original.txt'))
     expect(documents[0]?.metadata).toEqual({
       source: '/tmp/original.txt'
     })
@@ -97,7 +113,7 @@ describe('knowledge reader metadata', () => {
       'URL'
     )
 
-    expect(readFileMock).toHaveBeenCalledWith('/mock/feature.knowledgebase.data/kb-1/raw/example.md')
+    expect(readFileMock).toHaveBeenCalledWith(path.join(KB1_DIR, 'raw', 'example.md'))
     expect(documents).toHaveLength(1)
     expect(documents[0]?.text).toBe('# Page\n\nbody [kept](https://example.com/link)\n')
     expect(documents[0]?.metadata).toEqual({
@@ -142,7 +158,7 @@ describe('knowledge reader metadata', () => {
       'note'
     )
 
-    expect(readFileMock).toHaveBeenCalledWith('/mock/feature.knowledgebase.data/kb-1/raw/My note.md')
+    expect(readFileMock).toHaveBeenCalledWith(path.join(KB1_DIR, 'raw', 'My note.md'))
     expect(documents).toHaveLength(1)
     expect(documents[0]?.text).toBe('# Note title\n\nbody')
     expect(documents[0]?.metadata).toEqual({
