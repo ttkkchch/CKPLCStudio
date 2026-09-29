@@ -45,6 +45,7 @@ import { isAgentSessionTopic } from './agentSession/topic'
 import { createAnalyticsHook } from './hooks/analyticsHook'
 import { createAiUsagePlugin } from './hooks/billingHook'
 import { prepareChatMessages } from './messages/attachmentRouting'
+import { enforceContextBudget, enforceModelMessageBudget, estimateTextTokens } from './messages/contextBudget'
 import { resolveMediaCapabilities } from './messages/messageCapabilities'
 import { hasImageTransport } from './provider/custom/imageTransportRegistry'
 import { deleteImageInputEntries, imageGenerationJobHandler } from './provider/custom/tasks/imageGenerationJobHandler'
@@ -498,6 +499,15 @@ export class AiService extends BaseService {
       signal
     })
 
+    // Hard context-window budget: trim oldest history so the request always
+    // fits (long topics would otherwise be rejected by the model API with
+    // "maximum context length" and become unrecoverable for the user).
+    const budgeted = enforceContextBudget(preparedMessages, {
+      contextWindow: model.contextWindow,
+      systemTokens: estimateTextTokens(system ?? ''),
+      toolsTokens: estimateTextTokens(JSON.stringify(tools ?? []))
+    })
+
     const agent = new Agent({
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
@@ -522,7 +532,7 @@ export class AiService extends BaseService {
       mediaCapabilities: resolveMediaCapabilities(model)
     })
 
-    return agent.stream(preparedMessages, signal)
+    return agent.stream(budgeted.items, signal)
   }
 
   private analyticsHookPart(model: Model): Partial<AgentLoopHooks> {
@@ -564,7 +574,15 @@ export class AiService extends BaseService {
     })
 
     // prompt and messages are mutually exclusive in AI SDK; preserve that.
-    return agent.generate(request.prompt ? { prompt: request.prompt } : { messages: request.messages ?? [] }, signal)
+    if (request.prompt) {
+      return agent.generate({ prompt: request.prompt }, signal)
+    }
+    const budgetedMessages = enforceModelMessageBudget(request.messages ?? [], {
+      contextWindow: model.contextWindow,
+      systemTokens: estimateTextTokens(request.system ?? system ?? ''),
+      toolsTokens: estimateTextTokens(JSON.stringify(tools ?? []))
+    }).items
+    return agent.generate({ messages: budgetedMessages }, signal)
   }
 
   // ── Image generation ──
