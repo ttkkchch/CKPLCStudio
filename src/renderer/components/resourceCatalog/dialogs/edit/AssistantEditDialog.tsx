@@ -90,7 +90,7 @@ type AssistantToolTab = 'tools.mcp' | 'tools.knowledge'
 
 const logger = loggerService.withContext('AssistantEditDialog')
 const UI_DEFAULT_MAX_TOKENS = 4096
-const UI_DEFAULT_MAX_TOOL_CALLS = 20
+const UI_DEFAULT_MAX_TOOL_CALLS = 60
 
 function isAssistantToolTab(value: string): value is AssistantToolTab {
   return value === 'tools.mcp' || value === 'tools.knowledge'

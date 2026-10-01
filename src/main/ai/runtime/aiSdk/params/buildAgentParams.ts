@@ -423,10 +423,10 @@ export function applyCallOverrides(
   return { standardParams, providerOptions }
 }
 
-/** Mirrors the AI SDK / `ToolLoopAgent` default step cap (`stepCountIs(20)`). Used as the fallback
- *  bound when a feature contributes a `stopWhen` but no assistant base supplies one — passing any
- *  explicit `stopWhen` otherwise suppresses the SDK default and leaves the tool loop uncapped. */
-const SDK_DEFAULT_STEP_COUNT = 20
+/** Fallback step cap when a feature contributes a `stopWhen` but no assistant base supplies one —
+ *  passing any explicit `stopWhen` suppresses the SDK's own default and would otherwise leave the
+ *  tool loop uncapped. Kept in sync with DEFAULT_ASSISTANT_SETTINGS.maxToolCalls. */
+const SDK_DEFAULT_STEP_COUNT = 60
 
 /**
  * OR the assistant's step cap with feature-contributed stop conditions. An explicit `stopWhen`

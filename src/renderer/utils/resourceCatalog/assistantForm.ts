@@ -15,7 +15,7 @@ type CustomParameter = AssistantSettings['customParameters'][number]
 const UI_DEFAULT_TEMPERATURE = 1.0
 const UI_DEFAULT_TOP_P = 1
 const UI_DEFAULT_MAX_TOKENS = 4096
-const UI_DEFAULT_MAX_TOOL_CALLS = 20
+const UI_DEFAULT_MAX_TOOL_CALLS = 60
 
 /**
  * Flat form state for the Assistant edit dialog. Every editable field lives

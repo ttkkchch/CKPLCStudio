@@ -328,9 +328,9 @@ describe('composeStopWhen', () => {
     const conditions = result as StopCondition<ToolSet>[]
     expect(conditions).toHaveLength(2)
     expect(conditions[1]).toBe(feature)
-    // The injected fallback caps the tool loop at the SDK default of 20 steps.
-    expect(await conditions[0]({ steps: new Array(20) } as never)).toBe(true)
-    expect(await conditions[0]({ steps: new Array(19) } as never)).toBe(false)
+    // The injected fallback caps the tool loop at the default of 60 steps.
+    expect(await conditions[0]({ steps: new Array(60) } as never)).toBe(true)
+    expect(await conditions[0]({ steps: new Array(59) } as never)).toBe(false)
   })
 })
 
@@ -340,12 +340,12 @@ describe('resolveToolCallLimit', () => {
   })
 
   it('retains the effective default cap for assistant-less and disabled-limit requests', () => {
-    expect(resolveToolCallLimit(undefined)).toBe(20)
-    expect(resolveToolCallLimit(makeAssistant({ settings: { enableMaxToolCalls: false, maxToolCalls: 7 } }))).toBe(20)
+    expect(resolveToolCallLimit(undefined)).toBe(60)
+    expect(resolveToolCallLimit(makeAssistant({ settings: { enableMaxToolCalls: false, maxToolCalls: 7 } }))).toBe(60)
   })
 
   it('falls back when the configured limit is outside the supported range', () => {
-    expect(resolveToolCallLimit(makeAssistant({ settings: { maxToolCalls: 101 } }))).toBe(20)
+    expect(resolveToolCallLimit(makeAssistant({ settings: { maxToolCalls: 101 } }))).toBe(60)
   })
 })
 

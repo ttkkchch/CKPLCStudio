@@ -83,7 +83,9 @@ export const DEFAULT_ASSISTANT_SETTINGS: AssistantSettings = {
   streamOutput: true,
   reasoning_effort: 'default',
   mcpMode: 'auto',
-  maxToolCalls: 20,
+  // 60: multi-step agent tasks (e.g. TIA project scaffolding) legitimately
+  // use 28+ tool calls; 20 kept aborting them mid-flight.
+  maxToolCalls: 60,
   enableMaxToolCalls: true,
   enableWebSearch: false,
   enableGenerateImage: false,

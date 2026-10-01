@@ -162,7 +162,8 @@ describe('PreferencesMigrator', () => {
       const policyVersion = await selectByKey(dbh.db, 'app.privacy.policy_version')
       expect(policyVersion[0]?.value).toBe('')
       const dataCollection = await selectByKey(dbh.db, 'app.privacy.data_collection.enabled')
-      expect(dataCollection[0]?.value).toBe(true)
+      // Factory default is opt-in (false): industrial user data is sensitive.
+      expect(dataCollection[0]?.value).toBe(false)
       const clientId = await selectByKey(dbh.db, 'app.user.id')
       expect(clientId[0]?.value).toBe('')
     })

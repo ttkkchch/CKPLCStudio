@@ -529,7 +529,9 @@ export const DefaultPreferences: PreferenceSchemas = {
     'app.notification.knowledge.enabled': false,
     'app.onboarding.provider_setup.status': 'pending',
     'app.power.prevent_sleep_when_busy': false,
-    'app.privacy.data_collection.enabled': true,
+    // Opt-in, not opt-out: usage analytics stays off until the user explicitly
+    // enables it in Settings › Privacy. Industrial users are data-sensitive.
+    'app.privacy.data_collection.enabled': false,
     'app.privacy.policy_version': '',
     'app.proxy.bypass_rules': '',
     'app.proxy.mode': 'system',
