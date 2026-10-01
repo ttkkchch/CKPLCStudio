@@ -3,18 +3,18 @@
  * UI locator tables for GX Works3 / GX Works2 — the ONLY place that knows
  * control names.
  *
- * ⚠ 待校准 (Phase 0): candidate names below are derived from menu
- * documentation, NOT from a live AutomationId/Name inspection. Before Phase A
- * ships to real users, run the calibration procedure (psWorker `listChildren`
- * / `findElements` probes against a real install of each target, zh-CN and
- * en-US) and tighten the candidates. Keep this file data-only so calibration
- * never touches logic.
+ * Works3 values are CALIBRATED live (GX Works3 1.128J zh-CN, 2026-10-01 — see
+ * the "Phase 0 校准实测记录" section in .trae/documents/mitsubishi-gxworks3-support-plan.md).
+ * Works2 values are best-effort placeholders (same MELSOFT Codejock shell, no
+ * live probe run yet — 待校准). Keep this file data-only so calibration never
+ * touches logic.
  *
- * Matching rules (see windowOps): `names` are OR'd as exact UIA Name matches,
- * first hit wins; `controlType` narrows the search when given.
+ * MSAA matching rule: menu names are StartsWith PREFIXES against IAccessible
+ * names (menu items carry accelerator suffixes like 全部转换(R)). UIA matching
+ * (windowOps focusElement etc.) stays exact-name OR'd.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GX_ST_PASTE_KEYS = exports.GX_ST_COPY_KEYS = exports.GX_ST_SELECT_ALL_KEYS = exports.GX_OUTPUT_ERROR_PATTERN = exports.GX_OUTPUT_GRID_CONTROL_TYPES = exports.GX_PROFILES = void 0;
+exports.GX_BUILD_CONFIRM_KEYS = exports.GX_ST_PASTE_KEYS = exports.GX_ST_COPY_KEYS = exports.GX_ST_SELECT_ALL_KEYS = exports.GX_OUTPUT_ERROR_PATTERN = exports.GX_OUTPUT_GRID_CONTROL_TYPES = exports.GX_PROFILES = void 0;
 exports.getGxProfile = getGxProfile;
 exports.isGxTarget = isGxTarget;
 const WORKS3_PROFILE = {
@@ -24,19 +24,31 @@ const WORKS3_PROFILE = {
     titleContains: 'GX Works3',
     locators: {
         mainWindow: { names: ['GX Works3'], controlType: 'Window' },
-        compileMenu: { names: ['转换/编译', 'Compile', '変換/コンパイル'], controlType: 'MenuItem' },
-        compileAllMenuItem: {
-            names: ['全程序编译', '编译所有程序', 'Compile All Programs', '全プログラムコンパイル'],
-            controlType: 'MenuItem'
-        },
+        // Calibrated 1.128J zh-CN: top menu 转换(C) — the '(' distinguishes the
+        // menu root from 转换结果(N)/转换+RUN(B) under the same StartsWith rule.
+        compileMenu: { names: ['转换('] },
+        // Calibrated: 全部转换(R) inside 转换(C); MSAA BFS + accDoDefaultAction
+        // clicks it without physically expanding the menu.
+        compileAllMenuItem: { names: ['全部转换'] },
+        // Bottom dock pane content sits under XTPDockingPaneTabbedContainer →
+        // Afx:00300000:0 → #32770; pane lookup kept for the generic grid fallback.
         outputPane: { names: ['输出', 'Output', '出力'], controlType: 'Window' }
+    },
+    msaa: {
+        toolbarClassName: 'XTPToolBar',
+        compileDialogClassName: '#32770',
+        statusBarClassName: 'XTPStatusBar',
+        dockContainerClassName: 'XTPDockingPaneTabbedContainer',
+        outputListClassName: 'SysListView32',
+        minMenuPathSegments: 4
     },
     stRequiresStructuredProject: false
 };
 /**
- * GX Works2 candidates (待校准): the top menu is "转换(C)" (zh) / "Convert(C)"
- * (en) / "変換(C)" (ja), the rebuild-all item is "全部转换" / "Rebuild All",
- * and the output pane naming mirrors Works3. ST injection requires a
+ * GX Works2 candidates (待校准 — no live Works2 probe run yet): per MELSOFT
+ * documentation the top menu is 转换(C) / Convert(C) with a 全部转换 /
+ * Rebuild All item, and Works2 shares the Codejock-drawn shell, so the Works3
+ * mechanism/values are mirrored as placeholders. ST injection requires a
  * STRUCTURED project (结构化工程) — simple ladder projects have no ST editor.
  */
 const WORKS2_PROFILE = {
@@ -46,9 +58,14 @@ const WORKS2_PROFILE = {
     titleContains: 'GX Works2',
     locators: {
         mainWindow: { names: ['GX Works2'], controlType: 'Window' },
-        compileMenu: { names: ['转换', 'Convert', '変換'], controlType: 'MenuItem' },
-        compileAllMenuItem: { names: ['全部转换', 'Rebuild All', '全部変換'], controlType: 'MenuItem' },
+        compileMenu: { names: ['转换(', 'Convert('] },
+        compileAllMenuItem: { names: ['全部转换', 'Rebuild All'] },
         outputPane: { names: ['输出', 'Output', '出力'], controlType: 'Window' }
+    },
+    msaa: {
+        toolbarClassName: 'XTPToolBar',
+        compileDialogClassName: '#32770',
+        minMenuPathSegments: 4
     },
     stRequiresStructuredProject: true
 };
@@ -62,8 +79,8 @@ function getGxProfile(target) {
 function isGxTarget(value) {
     return value === 'works3' || value === 'works2';
 }
-/** Control types accepted when locating the Output window grid. */
-exports.GX_OUTPUT_GRID_CONTROL_TYPES = ['DataGrid', 'Table', 'Custom'];
+/** Control types accepted when locating the Output window grid (readGrid fallback). */
+exports.GX_OUTPUT_GRID_CONTROL_TYPES = ['DataGrid', 'Table', 'Custom', 'List'];
 /**
  * Locale-neutral error-line heuristic for Output text (待校准: confirm the
  * exact prefixes each generation emits, e.g. "エラー" / "错误" / "Error").
@@ -78,3 +95,9 @@ exports.GX_OUTPUT_ERROR_PATTERN = /error|错误|エラー/i;
 exports.GX_ST_SELECT_ALL_KEYS = '^a';
 exports.GX_ST_COPY_KEYS = '^c';
 exports.GX_ST_PASTE_KEYS = '^v';
+/**
+ * ENTER sent to the FOREGROUND modal rebuild dialog. Calibrated: BM_CLICK and
+ * accDoDefaultAction on 确定 merely close the dialog WITHOUT running the
+ * build — only ENTER on the foregrounded dialog actually starts the conversion.
+ */
+exports.GX_BUILD_CONFIRM_KEYS = '{ENTER}';

@@ -45,6 +45,103 @@ public static class GxNative {
 '@
 }
 
+if (-not ('GxMsaa' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using Accessibility;
+using System.Runtime.InteropServices;
+
+// MSAA (IAccessible) bridge. GX Works3's UI is Codejock (XTP) self-drawn: the
+// UIA tree has ZERO MenuItems, so menu navigation must go through IAccessible.
+// Calibrated live on GX Works3 1.128J zh-CN (2026-10-01): BFS over
+// AccessibleChildren + accDoDefaultAction clicks physically-unexpanded menu
+// items directly.
+public static class GxMsaa {
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint dwId, ref Guid iid, [In, Out] ref IAccessible ppvObject);
+
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleChildren(IAccessible paccContainer, int iChildStart, int cChildren, [Out] object[] rgvarChildren, out int pcObtained);
+
+    public static IAccessible FromWindow(IntPtr hwnd) {
+        Guid iid = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+        IAccessible acc = null;
+        // OBJID_WINDOW = 0xFFFFFFFC, written in decimal (PS parses 0x... as Int32 first).
+        int hr = AccessibleObjectFromWindow(hwnd, 4294967292u, ref iid, ref acc);
+        return hr == 0 ? acc : null;
+    }
+
+    private static string NameOf(IAccessible a, int cid) {
+        try { return a.get_accName(cid) as string; } catch { return null; }
+    }
+
+    private static void EnqueueKids(IAccessible pa, Queue<KeyValuePair<IAccessible, int>> qa, Queue<string> qp, string path) {
+        int n = 0;
+        try { n = pa.accChildCount; } catch { return; }
+        if (n <= 0) return;
+        object[] kids = new object[n];
+        int got;
+        if (AccessibleChildren(pa, 0, n, kids, out got) != 0) return;
+        for (int i = 0; i < got; i++) {
+            object k = kids[i];
+            if (k is int) {
+                qa.Enqueue(new KeyValuePair<IAccessible, int>(pa, (int)k));
+                qp.Enqueue(path + ">" + NameOf(pa, (int)k));
+            } else {
+                try {
+                    IAccessible ka = (IAccessible)k;
+                    qa.Enqueue(new KeyValuePair<IAccessible, int>(ka, 0));
+                    qp.Enqueue(path + ">" + NameOf(ka, 0));
+                } catch {}
+            }
+        }
+    }
+
+    // BFS by name prefix. minSegments filters same-caption toolbar buttons:
+    // menu items live >=4 path segments deep (root>menu(C)>menu(C)>item(R))
+    // while toolbar buttons sit at 2-3.
+    private static string Search(IntPtr hwnd, string itemName, int minSegments, bool doClick) {
+        IAccessible root = FromWindow(hwnd);
+        if (root == null) return "NO-ACC";
+        var qa = new Queue<KeyValuePair<IAccessible, int>>();
+        var qp = new Queue<string>();
+        qa.Enqueue(new KeyValuePair<IAccessible, int>(root, 0));
+        qp.Enqueue("root");
+        int visited = 0;
+        while (qa.Count > 0 && visited < 8000) {
+            var cur = qa.Dequeue();
+            string path = qp.Dequeue();
+            visited++;
+            IAccessible pa = cur.Key;
+            int cid = cur.Value;
+            string name = NameOf(pa, cid);
+            if (name != null && name.StartsWith(itemName, StringComparison.Ordinal)
+                && path.Split('>').Length >= minSegments) {
+                if (!doClick) return "FOUND " + path;
+                try {
+                    pa.accDoDefaultAction(cid);
+                    return "CLICKED " + path;
+                } catch (Exception ex) {
+                    return "CLICK-ERR " + path + " : " + ex.Message;
+                }
+            }
+            if (cid == 0) EnqueueKids(pa, qa, qp, path);
+        }
+        return "NOT-FOUND(" + visited + ")";
+    }
+
+    public static string FindPath(IntPtr hwnd, string itemName, int minSegments) {
+        return Search(hwnd, itemName, minSegments, false);
+    }
+
+    public static string ClickItem(IntPtr hwnd, string itemName, int minSegments) {
+        return Search(hwnd, itemName, minSegments, true);
+    }
+}
+'@ -ReferencedAssemblies Accessibility.dll
+}
+
 function ConvertTo-ElementInfo($el) {
     $c = $el.Current
     $info = @{
@@ -83,13 +180,22 @@ function Get-ControlType([string]$name) {
     }
 }
 
-function New-MatchCondition($names, $automationId, $controlTypes) {
+function New-MatchCondition($names, $automationId, $controlTypes, $classNames) {
     $groups = @()
     if ($names) {
         $or = @()
         foreach ($n in @($names)) {
             if ($null -eq $n) { continue }
             $or += (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, [string]$n))
+        }
+        if ($or.Count -eq 1) { $groups += $or[0] }
+        elseif ($or.Count -gt 1) { $groups += (New-Object System.Windows.Automation.OrCondition([System.Windows.Automation.Condition[]]$or)) }
+    }
+    if ($classNames) {
+        $or = @()
+        foreach ($cn in @($classNames)) {
+            if ($null -eq $cn) { continue }
+            $or += (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, [string]$cn))
         }
         if ($or.Count -eq 1) { $groups += $or[0] }
         elseif ($or.Count -gt 1) { $groups += (New-Object System.Windows.Automation.OrCondition([System.Windows.Automation.Condition[]]$or)) }
@@ -204,7 +310,7 @@ function Invoke-Op([string]$op, $params) {
         }
         'findElements' {
             $root = Get-RootElementFor $params.rootHandle
-            $cond = New-MatchCondition $params.names ([string]$params.automationId) $params.controlTypes
+            $cond = New-MatchCondition $params.names ([string]$params.automationId) $params.controlTypes $params.classNames
             $found = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
             $max = 30
             if ($params.maxResults) { $max = [int]$params.maxResults }
@@ -250,6 +356,88 @@ function Invoke-Op([string]$op, $params) {
                 return @{ pattern = 'expandCollapse'; invoked = (ConvertTo-ElementInfo $el) }
             } catch {}
             throw 'element has no invokable pattern (invoke/selectionItem/expandCollapse)'
+        }
+        'msaaFindPath' {
+            if (-not $params.itemName) { throw 'msaaFindPath requires params.itemName' }
+            $minSeg = 4
+            if ($params.minSegments) { $minSeg = [int]$params.minSegments }
+            $h = [IntPtr][int64]$params.rootHandle
+            return @{ path = [string][GxMsaa]::FindPath($h, [string]$params.itemName, $minSeg) }
+        }
+        'msaaClickMenu' {
+            if (-not $params.itemName) { throw 'msaaClickMenu requires params.itemName' }
+            if (-not $params.rootHandle) { throw 'msaaClickMenu requires params.rootHandle' }
+            $minSeg = 4
+            if ($params.minSegments) { $minSeg = [int]$params.minSegments }
+            $tbCls = 'XTPToolBar'
+            if ($params.toolbarClassName) { $tbCls = [string]$params.toolbarClassName }
+            $root = Get-RootElementFor $params.rootHandle
+            # Codejock draws its own menus, so the MSAA menu bar is one of the
+            # XTP* toolbars; same-caption toolbar BUTTONS sit too shallow and
+            # are skipped by the minSegments filter.
+            $clsCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, $tbCls)
+            $bars = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $clsCond)
+            $i = 0
+            foreach ($b in $bars) {
+                $i++
+                $bh = [IntPtr]$b.Current.NativeWindowHandle
+                if ($bh -eq [IntPtr]::Zero) { continue }
+                $p = [GxMsaa]::FindPath($bh, [string]$params.itemName, $minSeg)
+                if ($p.StartsWith('FOUND')) {
+                    $c = [GxMsaa]::ClickItem($bh, [string]$params.itemName, $minSeg)
+                    return @{ clicked = $c.StartsWith('CLICKED'); result = $c; path = $c; barIndex = $i; strategy = 'toolbar' }
+                }
+            }
+            # Fallback: BFS from the window root itself (menu bar is not an XTP* toolbar).
+            $h = [IntPtr][int64]$params.rootHandle
+            $c2 = [GxMsaa]::ClickItem($h, [string]$params.itemName, $minSeg)
+            return @{ clicked = $c2.StartsWith('CLICKED'); result = $c2; path = $c2; barIndex = 0; strategy = 'root' }
+        }
+        'findDialog' {
+            if (-not $params.className) { throw 'findDialog requires params.className' }
+            $root = Get-RootElementFor $params.rootHandle
+            $clsCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, [string]$params.className)
+            $visCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::IsOffscreenProperty, $false)
+            $cond = New-Object System.Windows.Automation.AndCondition([System.Windows.Automation.Condition[]]@($clsCond, $visCond))
+            $found = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
+            $out = @()
+            foreach ($d in $found) {
+                $out += (ConvertTo-ElementInfo $d)
+                if ($out.Count -ge 5) { break }
+            }
+            return @{ dialogs = @($out); total = [int]$found.Count }
+        }
+        'readOutputList' {
+            $root = Get-RootElementFor $params.rootHandle
+            $cls = 'SysListView32'
+            if ($params.className) { $cls = [string]$params.className }
+            $maxRows = 400
+            if ($params.maxRows) { $maxRows = [int]$params.maxRows }
+            $clsCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, $cls)
+            $found = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $clsCond)
+            $out = @()
+            foreach ($l in $found) {
+                if ($out.Count -ge 8) { break }
+                $rows = $l.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+                $names = @()
+                foreach ($r in $rows) {
+                    if ($names.Count -ge $maxRows) { break }
+                    $line = [string]$r.Current.Name
+                    if (-not $line) { $line = (Get-CellText $r) }
+                    $names += $line
+                }
+                # The Output list pairs with a SysHeader32 sibling (report view).
+                $hasHeader = $false
+                try {
+                    $parent = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($l)
+                    if ($parent) {
+                        $hdrCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, 'SysHeader32')
+                        $hasHeader = ($null -ne $parent.FindFirst([System.Windows.Automation.TreeScope]::Children, $hdrCond))
+                    }
+                } catch {}
+                $out += @{ rowCount = [int]$rows.Count; rows = @($names); hasHeader = $hasHeader }
+            }
+            return @{ lists = @($out) }
         }
         'clipboardWrite' {
             $count = Set-ClipboardText ([string]$params.text)
