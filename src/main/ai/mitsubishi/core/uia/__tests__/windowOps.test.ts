@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  GX_LOCATORS,
+  getGxProfile,
   GX_OUTPUT_ERROR_PATTERN,
+  GX_PROFILES,
   GX_ST_COPY_KEYS,
   GX_ST_PASTE_KEYS,
   GX_ST_SELECT_ALL_KEYS
@@ -68,11 +69,21 @@ function makeOps(fake: FakeWorker, extra: Partial<WindowOpsOptions> = {}): GxWin
 }
 
 describe('locatorMap', () => {
-  it('gives every locator at least one candidate name', () => {
-    for (const [key, locator] of Object.entries(GX_LOCATORS)) {
-      expect(locator.names.length, key).toBeGreaterThan(0)
-      for (const name of locator.names) expect(name.length, key).toBeGreaterThan(0)
+  it('gives every locator of every target at least one candidate name', () => {
+    for (const [target, profile] of Object.entries(GX_PROFILES)) {
+      for (const [key, locator] of Object.entries(profile.locators)) {
+        expect(locator.names.length, `${target}.${key}`).toBeGreaterThan(0)
+        for (const name of locator.names) expect(name.length, `${target}.${key}`).toBeGreaterThan(0)
+      }
+      expect(profile.titleContains.length, target).toBeGreaterThan(0)
     }
+  })
+
+  it('profiles the two generations with their window titles and ST constraints', () => {
+    expect(getGxProfile('works3').titleContains).toBe('GX Works3')
+    expect(getGxProfile('works2').titleContains).toBe('GX Works2')
+    expect(getGxProfile('works3').stRequiresStructuredProject).toBe(false)
+    expect(getGxProfile('works2').stRequiresStructuredProject).toBe(true)
   })
 
   it('keeps the SendKeys constants and the error pattern well-formed', () => {
@@ -204,5 +215,37 @@ describe('GxWindowOps.getOutputErrors', () => {
     fake.readRows = () => ['info ok', 'Error C1205', '警告 W1', '错误 E3']
     const errors = await makeOps(fake).getOutputErrors()
     expect(errors).toEqual(['Error C1205', '错误 E3'])
+  })
+})
+
+describe('GxWindowOps target=works2', () => {
+  it('attaches to a GX Works2 window when target=works2', async () => {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
+    const result = await makeOps(fake, { target: 'works2' }).attach()
+    expect(result.handle).toBe(7)
+  })
+
+  it('finds the window by the works2 title substring, not the works3 one', async () => {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
+    const attach = makeOps(fake, { target: 'works2' }).attach()
+    await expect(attach).resolves.toBeDefined()
+    expect(fake.calls.find((c) => c.op === 'findWindow')?.params.titleContains).toBe('GX Works2')
+  })
+
+  it('does not attach to Works2 windows with the default target', async () => {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
+    await expect(makeOps(fake).attach()).rejects.toThrow('未找到 GX Works3 主窗口')
+  })
+
+  it('hints at structured projects when the Works2 ST editor is missing', async () => {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
+    fake.focusOk = false
+    await expect(
+      makeOps(fake, { target: 'works2' }).writeSt({ blockName: 'Main', stCode: 'a;' })
+    ).rejects.toThrow(/结构化工程/)
   })
 })

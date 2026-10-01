@@ -103,6 +103,12 @@ describe('parseDevice 软元件代码表', () => {
     expect(parseDevice('STC10').unit).toBe('bit')
     expect(parseDevice('STN10')).toEqual({ code: 0xc8, name: 'STN', number: 10, unit: 'word' })
   })
+
+  it('Q/L 系列累计定时器 SS/SC/SN 与 iQ-R STS/STC/STN 同码（未证实，多源一致）', () => {
+    expect(parseDevice('SS10')).toEqual({ code: 0xc7, name: 'SS', number: 10, unit: 'bit' })
+    expect(parseDevice('SC10')).toEqual({ code: 0xc6, name: 'SC', number: 10, unit: 'bit' })
+    expect(parseDevice('SN10')).toEqual({ code: 0xc8, name: 'SN', number: 10, unit: 'word' })
+  })
 })
 
 describe('parseDevice 边界与非法输入', () => {

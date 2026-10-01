@@ -1,24 +1,28 @@
 /**
- * High-level GX Works3 window operations built on the PS UIA worker.
+ * High-level GX Works3 / GX Works2 window operations built on the PS UIA
+ * worker.
  *
  * The orchestration logic lives here (so it is unit-testable with a mock
  * worker); the PS script only provides primitives (find/focus/invoke,
- * clipboard, SendKeys, grid reading).
+ * clipboard, SendKeys, grid reading). All platform differences (window title,
+ * menu names, structured-project constraint) come from the per-target
+ * profile in locatorMap — one class serves both generations.
  *
  * ⚠ 待校准 (Phase 0): editor focusing and menu navigation depend on the real
- * GX Works3 UI tree; the strategies below are best-effort defaults pending a
+ * GX Works UI tree; the strategies below are best-effort defaults pending a
  * live calibration run. Pure Node stdlib — compiled standalone.
  */
 import { createHash } from 'node:crypto'
 
 import {
-  GX_LOCATORS,
-  GX_MAIN_WINDOW_TITLE,
+  getGxProfile,
   GX_OUTPUT_ERROR_PATTERN,
   GX_OUTPUT_GRID_CONTROL_TYPES,
   GX_ST_COPY_KEYS,
   GX_ST_PASTE_KEYS,
-  GX_ST_SELECT_ALL_KEYS
+  GX_ST_SELECT_ALL_KEYS,
+  type GxPlatformProfile,
+  type GxTarget
 } from './locatorMap'
 
 /** Minimal worker surface — tests inject a fake; production passes PsWorker. */
@@ -69,6 +73,8 @@ export interface WindowOpsOptions {
   settlePolls?: number
   /** hard deadline for build polling (ms) */
   buildTimeoutMs?: number
+  /** GX Works generation to operate on (default 'works3') */
+  target?: GxTarget
 }
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -92,6 +98,7 @@ export class GxWindowOps {
   private readonly pollMs: number
   private readonly settlePolls: number
   private readonly buildTimeoutMs: number
+  private readonly profile: GxPlatformProfile
 
   constructor(worker: PsWorkerLike, options: WindowOpsOptions = {}) {
     this.worker = worker
@@ -99,6 +106,7 @@ export class GxWindowOps {
     this.pollMs = options.pollMs ?? 800
     this.settlePolls = options.settlePolls ?? 2
     this.buildTimeoutMs = options.buildTimeoutMs ?? 120_000
+    this.profile = getGxProfile(options.target ?? 'works3')
   }
 
   /** Liveness probe (also warms up the PS worker). */
@@ -107,23 +115,24 @@ export class GxWindowOps {
   }
 
   /**
-   * Find the GX Works3 main window and bring it to the foreground.
+   * Find the GX Works main window and bring it to the foreground.
    * `projectHint` narrows by title substring when several GX windows exist.
    */
   async attach(projectHint?: string): Promise<AttachResult> {
+    const { displayName, titleContains } = this.profile
     const res = await this.worker.call<{ windows: ElementInfo[] }>('findWindow', {
-      titleContains: GX_MAIN_WINDOW_TITLE
+      titleContains
     })
     const windows = res.windows ?? []
     if (windows.length === 0) {
-      throw new Error('未找到 GX Works3 主窗口——请先手动打开 GX Works3 并加载工程')
+      throw new Error(`未找到 ${displayName} 主窗口——请先手动打开 ${displayName} 并加载工程`)
     }
     let picked = windows[0]
     if (projectHint) {
       const hit = windows.find((w) => (w.name ?? '').includes(projectHint))
       if (!hit) {
         throw new Error(
-          `发现 ${windows.length} 个 GX Works3 窗口，但没有标题包含 "${projectHint}" 的窗口；` +
+          `发现 ${windows.length} 个 ${displayName} 窗口，但没有标题包含 "${projectHint}" 的窗口；` +
             `实际标题: ${windows.map((w) => w.name).join(' ; ')}`
         )
       }
@@ -131,7 +140,7 @@ export class GxWindowOps {
     }
     const handle = picked.handle
     if (!handle) {
-      throw new Error('GX Works3 主窗口缺少 Win32 句柄（UIA NativeWindowHandle 为 0）')
+      throw new Error(`${displayName} 主窗口缺少 Win32 句柄（UIA NativeWindowHandle 为 0）`)
     }
     // Foreground is best-effort: Windows foreground-lock may refuse the first try.
     let fg = await this.worker.call<{ foregrounded: boolean; nowForeground: boolean }>('setForeground', { handle })
@@ -168,7 +177,9 @@ export class GxWindowOps {
       }
     }
     throw new Error(
-      `未找到块 "${blockName}" 的编辑器（请确认该块已在 GX Works3 中打开为活动编辑器）；最后一次查找: ${lastError}`
+      `未找到块 "${blockName}" 的编辑器（请确认该块已在 ${this.profile.displayName} 中打开为活动编辑器）` +
+        `${this.profile.stRequiresStructuredProject ? '；GX Works2 仅结构化工程的 ST 程序有 ST 编辑器，请确认工程类型与 POU 语言' : ''}` +
+        `；最后一次查找: ${lastError}`
     )
   }
 
@@ -256,14 +267,14 @@ export class GxWindowOps {
     const win = await this.attach()
     const baseline = (await this.tryReadOutputLines(win.handle)) ?? []
 
-    const menu = GX_LOCATORS.compileMenu
+    const menu = this.profile.locators.compileMenu
     await this.worker.call('invokeElement', {
       rootHandle: win.handle,
       names: asNames(menu.names),
       controlTypes: menu.controlType ? [menu.controlType] : undefined
     })
     await this.sleep(300)
-    const item = GX_LOCATORS.compileAllMenuItem
+    const item = this.profile.locators.compileAllMenuItem
     await this.worker.call('invokeElement', {
       rootHandle: win.handle,
       names: asNames(item.names),
@@ -329,7 +340,7 @@ export class GxWindowOps {
     try {
       const res = await this.worker.call<{ rows: string[] }>('readGrid', {
         rootHandle: handle,
-        paneNames: asNames(GX_LOCATORS.outputPane.names),
+        paneNames: asNames(this.profile.locators.outputPane.names),
         gridControlTypes: [...GX_OUTPUT_GRID_CONTROL_TYPES],
         maxRows: 400
       })

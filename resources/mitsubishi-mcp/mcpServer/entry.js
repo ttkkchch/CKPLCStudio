@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 /**
- * GX Works3 stdio MCP bridge — process entry point.
+ * GX Works stdio MCP bridge — process entry point.
  *
  * Runs under the app's own Electron binary in Node mode
  * (ELECTRON_RUN_AS_NODE=1, see gxWorks3McpSeeder). Implements the MCP stdio
@@ -12,20 +12,21 @@ Object.defineProperty(exports, "__esModule", { value: true });
  * the file tree compiles standalone via `pnpm mitsubishi:build` into
  * resources/mitsubishi-mcp/mcpServer/entry.js.
  *
+ * One bridge serves both generations (GX Works3 default, GX Works2 via the
+ * per-tool `target` argument).
+ *
  * Handshake: initialize → notifications/initialized → tools/list → tools/call.
  */
 const node_readline_1 = __importDefault(require("node:readline"));
 const psWorker_1 = require("../core/uia/psWorker");
-const windowOps_1 = require("../core/uia/windowOps");
 const tools_1 = require("./tools");
-const SERVER_NAME = 'gx-works3-bridge';
+const SERVER_NAME = 'gx-works-bridge';
 const SERVER_VERSION = '0.1.0';
 const PROTOCOL_VERSION = '2024-11-05';
 const worker = new psWorker_1.PsWorker();
-const ops = new windowOps_1.GxWindowOps(worker);
 function log(message) {
     // stderr is protocol-safe (never parsed by the client as JSON-RPC).
-    process.stderr.write(`[gx-works3-bridge] ${message}\n`);
+    process.stderr.write(`[gx-works-bridge] ${message}\n`);
 }
 function send(message) {
     process.stdout.write(JSON.stringify(message) + '\n');
@@ -41,7 +42,7 @@ async function handleToolCall(params) {
     const args = params.arguments && typeof params.arguments === 'object' && !Array.isArray(params.arguments)
         ? params.arguments
         : {};
-    return (0, tools_1.callTool)(ops, name, args);
+    return (0, tools_1.callTool)(worker, name, args);
 }
 async function dispatch(req) {
     const id = req.id;

@@ -52,12 +52,16 @@ const DEVICE_TABLE = {
     CS: { code: 0xc4, radix: RADIX_DECIMAL, unit: 'bit' }, // 计数器触点
     CC: { code: 0xc3, radix: RADIX_DECIMAL, unit: 'bit' }, // 计数器线圈
     CN: { code: 0xc5, radix: RADIX_DECIMAL, unit: 'word' }, // 计数器当前值
-    // ---- 累计定时器（iQ-R 命名 ST，对应 Q 系列命名 SS/SC/SN）四件套 ----
-    // 未证实（pymcprotocol 将 iQ-R 的 STS/STC/STN 映射到 SS/SC/SN 的 C7/C6/C8）
+    // ---- 累计定时器（iQ-R 命名 ST/STS/STC/STN；Q/L 系列命名 SS/SC/SN，同码）----
+    // 未证实（pymcprotocol 将 iQ-R 的 STS/STC/STN 与 Q 系列的 SS/SC/SN 映射到
+    // 同一组代码 C7/C6/C8，多源一致）
     ST: { code: 0xc7, radix: RADIX_DECIMAL, unit: 'bit' }, // ST 触点 = STS
     STS: { code: 0xc7, radix: RADIX_DECIMAL, unit: 'bit' }, // 累计定时器触点
     STC: { code: 0xc6, radix: RADIX_DECIMAL, unit: 'bit' }, // 累计定时器线圈
-    STN: { code: 0xc8, radix: RADIX_DECIMAL, unit: 'word' } // 累计定时器当前值
+    STN: { code: 0xc8, radix: RADIX_DECIMAL, unit: 'word' }, // 累计定时器当前值
+    SS: { code: 0xc7, radix: RADIX_DECIMAL, unit: 'bit' }, // 累计定时器触点（Q/L 系列）
+    SC: { code: 0xc6, radix: RADIX_DECIMAL, unit: 'bit' }, // 累计定时器线圈（Q/L 系列）
+    SN: { code: 0xc8, radix: RADIX_DECIMAL, unit: 'word' } // 累计定时器当前值（Q/L 系列）
 };
 /** 3E 帧"软元件编号"字段为 3 字节小端（代码占第 4 字节），编号上限 24 位 */
 const MAX_DEVICE_NUMBER = 0xffffff;
