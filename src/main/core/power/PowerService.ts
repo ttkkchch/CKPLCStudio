@@ -286,8 +286,40 @@ export class PowerService extends BaseService {
 
       logger.info('Windows shutdown handler registered')
     } catch (error) {
-      logger.error('Failed to initialize Windows shutdown handler', error as Error)
+      // Expected on builds without the compiled native addon (no MSVC toolchain —
+      // see electron-builder.yml npmRebuild note). Degrade to a best-effort
+      // powerMonitor listener so shutdown handlers still get a chance to run,
+      // instead of leaving Windows with NO barrier at all.
+      logger.warn('Windows shutdown handler unavailable — degrading to powerMonitor fallback', {
+        reason: (error as Error)?.message
+      })
+      this.initWindowsPowerMonitorFallback()
     }
+  }
+
+  /**
+   * Best-effort Windows fallback when the native shutdown addon is missing.
+   * Electron's powerMonitor does emit 'shutdown' on Windows (WM_ENDSESSION), but
+   * unlike the native addon it CANNOT block/pause shutdown — the OS may kill us
+   * mid-run after its short grace period. Handlers therefore still run, just
+   * without the hard barrier guarantee. This is strictly better than silence.
+   */
+  private initWindowsPowerMonitorFallback(): void {
+    const shutdownListener = async () => {
+      logger.info('System shutdown event detected via powerMonitor fallback (Windows)')
+      try {
+        await this.executeShutdownHandlers()
+      } finally {
+        // Mirror the native Windows / macOS/Linux paths: quit cleanly so the app's
+        // _isQuitting bookkeeping stays consistent. powerMonitor cannot block the
+        // shutdown (the OS may still kill us mid-run), but an orderly exit via the
+        // normal quit flow beats an abrupt termination whenever we get the chance.
+        application.quit()
+      }
+    }
+    powerMonitor.on('shutdown', shutdownListener)
+    this.registerDisposable(() => powerMonitor.removeListener('shutdown', shutdownListener))
+    logger.info('Windows powerMonitor shutdown fallback registered')
   }
 
   // ==========================================================================

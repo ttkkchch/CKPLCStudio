@@ -303,6 +303,40 @@ describe('PowerService', () => {
       expect(releaseShutdown).toHaveBeenCalledTimes(1)
       expect(quitMock()).toHaveBeenCalledTimes(1)
     })
+
+    it('degrades to a powerMonitor fallback when the native addon binary is missing', async () => {
+      // Simulate a build without the compiled addon (no MSVC toolchain — see the
+      // electron-builder.yml npmRebuild note): require() throws MODULE_NOT_FOUND and
+      // init must still leave a working best-effort barrier instead of none at all.
+      const previousLoad = moduleWithLoad._load
+      moduleWithLoad._load = (request: string, parent: unknown, isMain: boolean) => {
+        if (request === '@paymoapp/electron-shutdown-handler') {
+          const err: NodeJS.ErrnoException = new Error(`Cannot find module '${request}'`)
+          err.code = 'MODULE_NOT_FOUND'
+          throw err
+        }
+        return previousLoad(request, parent, isMain)
+      }
+      try {
+        const service = await createInitedService()
+
+        // No native hook was installed...
+        expect(setWindowHandle).not.toHaveBeenCalled()
+        expect(shutdownHandlerOn).not.toHaveBeenCalled()
+        expect(blockShutdown).not.toHaveBeenCalled()
+        // ...but the best-effort powerMonitor fallback is registered instead.
+        expect(powerMonitorListeners.has('shutdown')).toBe(true)
+
+        const handler = vi.fn()
+        service.registerShutdownHandler(handler)
+        await fire('shutdown')
+
+        expect(handler).toHaveBeenCalled()
+        expect(quitMock()).toHaveBeenCalledTimes(1)
+      } finally {
+        moduleWithLoad._load = previousLoad
+      }
+    })
   })
 
   describe('sleep prevention', () => {
