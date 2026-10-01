@@ -18,6 +18,23 @@ import { toAsarUnpackedPath } from './asar'
  */
 export const CHERRY_RESOURCE_PREFIX = 'cherry-resource://'
 
+/**
+ * Marker prefix for MCP server `command` values that launch the app's OWN
+ * Electron binary in Node mode (spawn env must set ELECTRON_RUN_AS_NODE=1).
+ * Used by the Mitsubishi GX Works3 bridge: unlike the prebuilt TiaMcpServer.exe
+ * it is pure JS, so reusing the app binary avoids shipping a second runtime.
+ *
+ * Resolved at SPAWN time to `process.execPath`, so the stored command never
+ * goes stale across installs/moves (no seeder repair needed for the command;
+ * only its script-path argument is resolved at seed time, like the TIA exe).
+ */
+export const CHERRY_APP_EXE_PREFIX = 'cherry-app-exe://'
+
+/** Whether an MCP server `command` references the app's own Electron binary. */
+export function isAppExeMcpCommand(command: string): boolean {
+  return command.startsWith(CHERRY_APP_EXE_PREFIX)
+}
+
 /** Whether an MCP server `command` references a bundled resource. */
 export function isBundledMcpCommand(command: string): boolean {
   return command.startsWith(CHERRY_RESOURCE_PREFIX)
@@ -32,6 +49,9 @@ export function isBundledMcpCommand(command: string): boolean {
  * - Anything else → returned unchanged (regular commands, `npx`, URLs, etc.).
  */
 export function resolveBundledMcpCommand(command: string): string {
+  if (isAppExeMcpCommand(command)) {
+    return process.execPath
+  }
   if (!isBundledMcpCommand(command)) {
     return command
   }

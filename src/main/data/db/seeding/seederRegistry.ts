@@ -2,7 +2,10 @@ import type { ISeeder } from '../types'
 import { CherryAiDefaultModelSeeder } from './seeders/cherryaiDefaultModelSeeder'
 import { CherryAssistantSeeder } from './seeders/cherryAssistantSeeder'
 import { DefaultAssistantSeeder } from './seeders/defaultAssistantSeeder'
+import { GxWorks3McpSeeder } from './seeders/gxWorks3McpSeeder'
+import { GxWorkspaceMcpSeeder } from './seeders/gxWorkspaceMcpSeeder'
 import { MiniAppSeeder } from './seeders/miniAppSeeder'
+import { MitsubishiAssistantSeeder } from './seeders/mitsubishiAssistantSeeder'
 import { PreferenceSeeder } from './seeders/preferenceSeeder'
 import { PresetProviderSeeder } from './seeders/presetProviderSeeder'
 import { TiaAssistantSeeder } from './seeders/tiaAssistantSeeder'
@@ -32,5 +35,10 @@ export const seeders: ISeeder[] = [
   // seeder binds the factory assistant to both seeded MCP server rows.
   new TiaWorkspaceMcpSeeder(),
   // Must run after TiaMcpSeeder: it binds the assistant to the seeded MCP server row.
-  new TiaAssistantSeeder()
+  new TiaAssistantSeeder(),
+  // GX (Mitsubishi) chain mirrors the TIA order: both MCP servers must exist
+  // before the assistant seeder binds them. Windows-gated inside each seeder.
+  new GxWorks3McpSeeder(),
+  new GxWorkspaceMcpSeeder(),
+  new MitsubishiAssistantSeeder()
 ]

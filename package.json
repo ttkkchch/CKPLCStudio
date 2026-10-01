@@ -13,6 +13,7 @@
   "scripts": {
     "start": "pnpm rebuild:electron && electron-vite preview",
     "download:binaries": "node scripts/download-binaries.js",
+    "mitsubishi:build": "tsc -p tsconfig.mitsubishi.json",
     "rebuild:electron": "electron-rebuild --force --only better-sqlite3",
     "rebuild:node": "pnpm rebuild better-sqlite3",
     "dev": "pnpm rebuild:electron && pnpm download:binaries && dotenv electron-vite dev",

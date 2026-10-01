@@ -110,6 +110,9 @@ export function buildPathRegistry() {
     // TIA workspace: per-project session notes for the TIA Engineer assistant
     // (always-whitelisted root of the @cherry/tia-workspace MCP server)
     'feature.tia.workspace': path.join(appUserDataData, 'tia_workspace'),
+    // GX workspace: per-project session notes for the Mitsubishi Engineer
+    // assistant (always-whitelisted root of the @cherry/gx-workspace MCP server)
+    'feature.gx.workspace': path.join(appUserDataData, 'gx_workspace'),
 
     // Copilot token
     'feature.copilot.token_file': path.join(CHERRY_HOME, 'config', '.copilot_token'),

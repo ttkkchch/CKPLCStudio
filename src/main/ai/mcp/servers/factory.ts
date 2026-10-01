@@ -1,3 +1,4 @@
+import { application } from '@application'
 import { loggerService } from '@logger'
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { type BuiltinMcpServerName, BuiltinMcpServerNames } from '@shared/utils/mcp'
@@ -54,6 +55,10 @@ export function createInMemoryMcpServer(
     }
     case BuiltinMcpServerNames.tiaWorkspace: {
       return new TiaWorkspaceServer(envs.TIA_EXTRA_ROOTS).server
+    }
+    case BuiltinMcpServerNames.gxWorkspace: {
+      // Same file/note toolset as tiaWorkspace, rooted at the GX workspace dir.
+      return new TiaWorkspaceServer(envs.GX_EXTRA_ROOTS, application.getPath('feature.gx.workspace')).server
     }
     default:
       throw new Error(`Unknown in-memory MCP server: ${name}`)

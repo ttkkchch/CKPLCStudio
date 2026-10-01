@@ -94,8 +94,11 @@ export class TiaWorkspaceServer {
   /** Extra whitelisted roots (from the server row env TIA_EXTRA_ROOTS, ';'-separated). */
   private readonly roots: string[]
 
-  constructor(extraRoots?: string) {
-    this.notesDir = application.getPath('feature.tia.workspace')
+  constructor(extraRoots?: string, notesDirOverride?: string) {
+    // notesDirOverride: the @cherry/gx-workspace row reuses this server class with
+    // the Mitsubishi GX workspace path (feature.gx.workspace) — tool behavior is
+    // identical, only the always-allowed notes root and log label differ.
+    this.notesDir = notesDirOverride ?? application.getPath('feature.tia.workspace')
     const candidates = [this.notesDir]
     for (const raw of (extraRoots ?? '').split(';')) {
       const trimmed = raw.trim()

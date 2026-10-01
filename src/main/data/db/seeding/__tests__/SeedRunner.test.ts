@@ -180,9 +180,10 @@ describe('SeedRunner', () => {
     runner.runAll(seeders)
 
     const assistants = await dbh.db.select().from(assistantTable)
-    // The default assistant plus the bundled TIA Engineer assistant, each seeded exactly once.
+    // The default assistant plus the bundled TIA Engineer and Mitsubishi
+    // Engineer assistants, each seeded exactly once.
     // (Names are the English defaults: the test harness runs with an en locale.)
-    expect(assistants).toHaveLength(2)
-    expect(assistants.map((a) => a.name).sort()).toEqual(['PLC Assistant', 'TIA Engineer'])
+    expect(assistants).toHaveLength(3)
+    expect(assistants.map((a) => a.name).sort()).toEqual(['Mitsubishi Engineer', 'PLC Assistant', 'TIA Engineer'])
   })
 })
