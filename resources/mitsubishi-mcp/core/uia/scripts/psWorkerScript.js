@@ -31,6 +31,7 @@ Add-Type -AssemblyName System.Windows.Forms | Out-Null
 if (-not ('GxNative' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 public static class GxNative {
@@ -41,6 +42,31 @@ public static class GxNative {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder sb, int maxCount);
     public static string ClassNameOf(IntPtr hWnd) { var sb = new StringBuilder(256); return GetClassName(hWnd, sb, 256) > 0 ? sb.ToString() : ""; }
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder sb, int maxCount);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lp);
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lp);
+
+    // Owned dialogs of GX Works2's build confirm are TOP-LEVEL windows (not
+    // main-window children), invisible to a UIA Descendants search from the
+    // frame. Scan top-level windows of the SAME process by class name instead.
+    public static List<KeyValuePair<long, string>> TopDialogsOf(IntPtr main, uint pid, string className) {
+        var found = new List<KeyValuePair<long, string>>();
+        EnumWindows(delegate(IntPtr h, IntPtr lp) {
+            if (!IsWindowVisible(h)) return true;
+            var cn = new StringBuilder(256);
+            if (GetClassName(h, cn, 256) <= 0 || cn.ToString() != className) return true;
+            uint wpid = 0;
+            GetWindowThreadProcessId(h, out wpid);
+            if (wpid != pid) return true;
+            var tt = new StringBuilder(512);
+            if (GetWindowText(h, tt, 512) <= 0) return true;
+            found.Add(new KeyValuePair<long, string>(h.ToInt64(), tt.ToString()));
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
 }
 '@
 }
@@ -138,6 +164,43 @@ public static class GxMsaa {
     public static string ClickItem(IntPtr hwnd, string itemName, int minSegments) {
         return Search(hwnd, itemName, minSegments, true);
     }
+
+    // VSFlexGrid8N output grid (GX Works2, calibrated live 2026-10-01): the
+    // MSAA root is a LIST whose children are header LISTITEMs (childCount 0)
+    // plus Row-N PAGETABs owning PROPERTYPAGE cells whose accValue carries the
+    // text. Rows are joined "cell | cell" skipping empty cells, e.g.
+    // "1 | Error | POU_01 | 编译程序 | 没有找到算式。 | C8042".
+    public static List<string> GridRows(IntPtr hwnd, int maxRows) {
+        var rowsOut = new List<string>();
+        IAccessible root = FromWindow(hwnd);
+        if (root == null) return rowsOut;
+        int n = 0;
+        try { n = root.accChildCount; } catch {}
+        if (n <= 0) return rowsOut;
+        object[] kids = new object[n];
+        int got;
+        if (AccessibleChildren(root, 0, n, kids, out got) != 0) return rowsOut;
+        for (int i = 0; i < got && rowsOut.Count < maxRows; i++) {
+            IAccessible row = kids[i] as IAccessible;
+            if (row == null) continue;
+            int rc = 0;
+            try { rc = row.accChildCount; } catch {}
+            if (rc <= 0) continue; // header LISTITEMs carry no children
+            object[] cells = new object[rc];
+            int cgot;
+            if (AccessibleChildren(row, 0, rc, cells, out cgot) != 0) continue;
+            var parts = new List<string>();
+            for (int j = 0; j < cgot; j++) {
+                IAccessible cell = cells[j] as IAccessible;
+                if (cell == null) continue;
+                string v = null;
+                try { v = cell.get_accValue(0) as string; } catch {}
+                if (!string.IsNullOrEmpty(v)) parts.Add(v);
+            }
+            rowsOut.Add(string.Join(" | ", parts.ToArray()));
+        }
+        return rowsOut;
+    }
 }
 '@ -ReferencedAssemblies Accessibility.dll
 }
@@ -230,8 +293,8 @@ function Get-RootElementFor($handle) {
     return [System.Windows.Automation.AutomationElement]::RootElement
 }
 
-function Find-FirstElement($root, $names, $automationId, $controlTypes) {
-    $cond = New-MatchCondition $names $automationId $controlTypes
+function Find-FirstElement($root, $names, $automationId, $controlTypes, $classNames) {
+    $cond = New-MatchCondition $names $automationId $controlTypes $classNames
     $found = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
     if ($found.Count -gt 0) { return $found[0] }
     return $null
@@ -284,6 +347,21 @@ function Get-ClipboardText {
     throw 'clipboard GetText failed (busy or non-STA apartment)'
 }
 
+# Titled top-level dialogs of the SAME process as $handle (owned dialogs never
+# appear under the owner in a UIA Descendants search).
+function Find-TopLevelDialogs($handle, [string]$cls) {
+    $h = [IntPtr][int64]$handle
+    $mainPid = [uint32]0
+    [void][GxNative]::GetWindowThreadProcessId($h, [ref]$mainPid)
+    $tops = [GxNative]::TopDialogsOf($h, $mainPid, $cls)
+    $out = @()
+    foreach ($t in $tops) {
+        $out += @{ name = [string]$t.Value; automationId = ''; controlType = 'Window'; className = $cls; enabled = $true; handle = [int64]$t.Key }
+        if ($out.Count -ge 5) { break }
+    }
+    return ,$out
+}
+
 function Invoke-Op([string]$op, $params) {
     switch ($op) {
         'ping' {
@@ -333,11 +411,16 @@ function Invoke-Op([string]$op, $params) {
         }
         'focusElement' {
             $root = Get-RootElementFor $params.rootHandle
-            $el = Find-FirstElement $root $params.names ([string]$params.automationId) $params.controlTypes
+            $el = Find-FirstElement $root $params.names ([string]$params.automationId) $params.controlTypes $params.classNames
             if ($null -eq $el) { throw 'element not found (focusElement)' }
             $el.SetFocus()
             Start-Sleep -Milliseconds 120
             return @{ focused = (ConvertTo-ElementInfo $el) }
+        }
+        'getFocusedElement' {
+            $el = [System.Windows.Automation.AutomationElement]::FocusedElement
+            if ($null -eq $el) { return @{ info = $null } }
+            return @{ info = (ConvertTo-ElementInfo $el) }
         }
         'invokeElement' {
             $root = Get-RootElementFor $params.rootHandle
@@ -395,22 +478,43 @@ function Invoke-Op([string]$op, $params) {
         }
         'findDialog' {
             if (-not $params.className) { throw 'findDialog requires params.className' }
-            $root = Get-RootElementFor $params.rootHandle
-            $clsCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, [string]$params.className)
-            $visCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::IsOffscreenProperty, $false)
-            $cond = New-Object System.Windows.Automation.AndCondition([System.Windows.Automation.Condition[]]@($clsCond, $visCond))
-            $found = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
+            $search = 'child'
+            if ($params.search) { $search = [string]$params.search }
             $out = @()
-            foreach ($d in $found) {
-                $out += (ConvertTo-ElementInfo $d)
-                if ($out.Count -ge 5) { break }
+            $total = 0
+            if ($search -ne 'top-level') {
+                $root = Get-RootElementFor $params.rootHandle
+                $clsCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, [string]$params.className)
+                $visCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::IsOffscreenProperty, $false)
+                $cond = New-Object System.Windows.Automation.AndCondition([System.Windows.Automation.Condition[]]@($clsCond, $visCond))
+                $found = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
+                $total = [int]$found.Count
+                foreach ($d in $found) {
+                    $out += (ConvertTo-ElementInfo $d)
+                    if ($out.Count -ge 5) { break }
+                }
+                if ($out.Count -eq 0) {
+                    # Works2's build-confirm dialog is an OWNED TOP-LEVEL window,
+                    # so a UIA Descendants search under the frame never sees it.
+                    # Scan same-process top-level windows by class name instead.
+                    $out = Find-TopLevelDialogs $params.rootHandle ([string]$params.className)
+                }
+            } else {
+                # Works2 (calibrated live 2026-10-01): the main frame keeps
+                # EMPTY-TITLED child #32770 MDI containers around, so a UIA
+                # descendants search hits those first and ENTER would land in
+                # the wrong window. The confirm dialog is always the one titled
+                # top-level #32770 of the process — search that channel ONLY.
+                $out = Find-TopLevelDialogs $params.rootHandle ([string]$params.className)
             }
-            return @{ dialogs = @($out); total = [int]$found.Count }
+            return @{ dialogs = @($out); total = $total }
         }
         'readOutputList' {
             $root = Get-RootElementFor $params.rootHandle
             $cls = 'SysListView32'
             if ($params.className) { $cls = [string]$params.className }
+            $reader = 'uia-list'
+            if ($params.reader) { $reader = [string]$params.reader }
             $maxRows = 400
             if ($params.maxRows) { $maxRows = [int]$params.maxRows }
             $clsCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, $cls)
@@ -418,6 +522,16 @@ function Invoke-Op([string]$op, $params) {
             $out = @()
             foreach ($l in $found) {
                 if ($out.Count -ge 8) { break }
+                if ($reader -eq 'msaa-grid') {
+                    # Works2 VSFlexGrid8N: an MSAA-only ActiveX grid whose row
+                    # text lives in cell accValue, invisible to UIA names. The
+                    # grid hwnd is read directly through GxMsaa (calibrated).
+                    $gw = [IntPtr]$l.Current.NativeWindowHandle
+                    if ($gw -eq [IntPtr]::Zero) { continue }
+                    $gridRows = [GxMsaa]::GridRows($gw, $maxRows)
+                    $out += @{ rowCount = [int]$gridRows.Count; rows = @($gridRows); hasHeader = $false }
+                    continue
+                }
                 $rows = $l.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
                 $names = @()
                 foreach ($r in $rows) {

@@ -45,28 +45,59 @@ const WORKS3_PROFILE = {
     stRequiresStructuredProject: false
 };
 /**
- * GX Works2 candidates (待校准 — no live Works2 probe run yet): per MELSOFT
- * documentation the top menu is 转换(C) / Convert(C) with a 全部转换 /
- * Rebuild All item, and Works2 shares the Codejock-drawn shell, so the Works3
- * mechanism/values are mirrored as placeholders. ST injection requires a
- * STRUCTURED project (结构化工程) — simple ladder projects have no ST editor.
+ * GX Works2 CALIBRATED live (GD2.exe from MELSOFT\GPPW2, zh-CN, 1.635M,
+ * structured project + full build chain exercised, 2026-10-01): UIA also
+ * exposes ZERO MenuItems; the menu bar is an XTPToolBar whose MSAA root is
+ * [MENUBAR] 菜单栏, and the full menu tree is visible via MSAA at 3 segments
+ * (BAR>item>popup>leaf) WITHOUT works3's double CHECKBOX/CANVAS wrapping.
+ * Build flow (live-verified twice): clicking 转换(+全部编译)(全部程序)(R) pops
+ * an OWNED TOP-LEVEL #32770 confirm dialog ("是否执行全部编译？", title = main
+ * frame title, 是(Y)/否(N)) — the works3 dialog is a main-window child, so
+ * findDialog falls back to a pid-filtered top-level scan. ENTER on the
+ * foregrounded dialog (是 = default button) runs the compile. Results land in
+ * the VSFlexGrid8N output grid (NOT the status bar — its msctls_statusbar32
+ * panes carry no compile info): root LIST → header LISTITEMs + Row-N PAGETABs
+ * whose PROPERTYPAGE cells expose accValue text; the 结果 column enum is
+ * Error / CheckWarning / Information (live error sample: C8042 没有找到算式。).
+ * Direct device access (X0/M0/Y10) compiles without labels in structured ST.
+ * ST injection requires a STRUCTURED project.
  */
 const WORKS2_PROFILE = {
     target: 'works2',
     displayName: 'GX Works2',
-    // Frame title: "<project> - [<view>] - GX Works2".
+    // Frame title: "MELSOFT系列 GX Works2" (no project) — contains suffix stands.
     titleContains: 'GX Works2',
     locators: {
         mainWindow: { names: ['GX Works2'], controlType: 'Window' },
-        compileMenu: { names: ['转换(', 'Convert('] },
-        compileAllMenuItem: { names: ['全部转换', 'Rebuild All'] },
+        // Calibrated zh-CN: top menu is 转换/编译(C) — NOT works3's 转换(C).
+        compileMenu: { names: ['转换/编译(', 'Convert/Compile('] },
+        // Calibrated: 转换(+全部编译)(全部程序)(R); the prefix distinguishes it
+        // from 转换(+编译)(B) under the same StartsWith rule.
+        compileAllMenuItem: { names: ['转换(+全部编译)', 'Convert(+Compile All)'] },
         outputPane: { names: ['输出', 'Output', '出力'], controlType: 'Window' }
     },
     msaa: {
         toolbarClassName: 'XTPToolBar',
         compileDialogClassName: '#32770',
-        minMenuPathSegments: 4
+        // The confirm dialog is top-level, NOT a frame child (see field doc).
+        compileDialogScope: 'top-level',
+        statusBarClassName: 'msctls_statusbar32',
+        dockContainerClassName: 'XTPDockingPaneTabbedContainer',
+        outputListClassName: 'VSFlexGrid8N',
+        // VSFlexGrid8N is an MSAA-only ActiveX grid — its row text lives in cell
+        // accValue, not UIA names, so rows are read through the MSAA grid walker.
+        outputListReader: 'msaa-grid',
+        // Menu leaves sit at BAR>item>popup>leaf = 3 segments (no CANVAS layer).
+        minMenuPathSegments: 3
     },
+    // Result rows join as "1 | Error | POU_01 | 编译程序 | ... | C8042"; match the
+    // 结果 cell exactly so the header row (…| 错误代码) and CheckWarning rows
+    // never classify as errors.
+    outputErrorPattern: /\|\s*Error\s*\|/,
+    // The ST editor is an unnamed RichEdit20W; name lookups would focus the
+    // project-tree item with the same caption instead (observed live: the
+    // clipboard round-trip then false-matches and the build compiles stale code).
+    editorFocusClassName: 'RichEdit20W',
     stRequiresStructuredProject: true
 };
 exports.GX_PROFILES = {
@@ -82,8 +113,9 @@ function isGxTarget(value) {
 /** Control types accepted when locating the Output window grid (readGrid fallback). */
 exports.GX_OUTPUT_GRID_CONTROL_TYPES = ['DataGrid', 'Table', 'Custom', 'List'];
 /**
- * Locale-neutral error-line heuristic for Output text (待校准: confirm the
- * exact prefixes each generation emits, e.g. "エラー" / "错误" / "Error").
+ * Locale-neutral error-line heuristic for Output text (works3: 待校准 exact
+ * prefixes; works2 overrides this with its profile.outputErrorPattern because
+ * its rows are cell joins classified by the 结果 column, see WORKS2_PROFILE).
  */
 exports.GX_OUTPUT_ERROR_PATTERN = /error|错误|エラー/i;
 /**

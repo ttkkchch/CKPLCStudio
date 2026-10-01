@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   getGxProfile,
+  GX_BUILD_CONFIRM_KEYS,
   GX_OUTPUT_ERROR_PATTERN,
   GX_PROFILES,
   GX_ST_COPY_KEYS,
@@ -17,11 +18,17 @@ class FakeWorker implements PsWorkerLike {
   clipboard = ''
   editorContent = 'old content'
   pasteEnabled = true
+  /** false → the select-all+copy writes nothing (focus not in a text control). */
+  copyEnabled = true
+  /** UIA className reported by the getFocusedElement probe. */
+  focusedClassName = ''
   focusOk = true
   /** null → output reads throw (pane absent); else called per output read. */
   readRows: (() => string[]) | null = () => []
   menuClickOk = true
   dialogFound = true
+  /** true → the confirm dialog survives ENTER (build must hard-fail on works2). */
+  dialogSticks = false
   foregroundOk = true
   /** XTPStatusBar UIA Name per status-bar read (function = dynamic sequence). */
   statusText: string | (() => string) = ''
@@ -47,9 +54,13 @@ class FakeWorker implements PsWorkerLike {
           // Editors normalize CRLF and may append a trailing newline.
           this.editorContent = this.clipboard.replace(/\r\n/g, '\n') + '\n'
         }
-        if (keys === GX_ST_COPY_KEYS) this.clipboard = this.editorContent
+        if (keys === GX_ST_COPY_KEYS && this.copyEnabled) this.clipboard = this.editorContent
+        // ENTER on the confirm dialog closes it (unless dialogSticks).
+        if (keys === GX_BUILD_CONFIRM_KEYS && !this.dialogSticks) this.dialogFound = false
         return { sent: keys } as T
       }
+      case 'getFocusedElement':
+        return { info: { className: this.focusedClassName } } as T
       case 'focusElement':
         if (!this.focusOk) throw new Error('element not found (focusElement)')
         return { focused: { name: String((params.names as string[])[0]) } } as T
@@ -132,7 +143,7 @@ describe('locatorMap', () => {
     expect(getGxProfile('works2').stRequiresStructuredProject).toBe(true)
   })
 
-  it('carries the calibrated works3 MSAA parameters and works2 placeholders', () => {
+  it('carries the calibrated MSAA parameters for both generations', () => {
     const w3 = getGxProfile('works3')
     expect(w3.msaa.toolbarClassName).toBe('XTPToolBar')
     expect(w3.msaa.compileDialogClassName).toBe('#32770')
@@ -143,6 +154,24 @@ describe('locatorMap', () => {
     // Calibrated MSAA StartsWith prefixes (1.128J zh-CN).
     expect(w3.locators.compileMenu.names).toContain('转换(')
     expect(w3.locators.compileAllMenuItem.names).toContain('全部转换')
+    // Calibrated works2 (GD2/GPPW2 zh-CN, 2026-10-01): 3-segment menu tree,
+    // VSFlexGrid8N output grid, native MFC status bar.
+    const w2 = getGxProfile('works2')
+    expect(w2.msaa.statusBarClassName).toBe('msctls_statusbar32')
+    expect(w2.msaa.outputListClassName).toBe('VSFlexGrid8N')
+    expect(w2.msaa.minMenuPathSegments).toBe(3)
+    expect(w2.locators.compileMenu.names).toContain('转换/编译(')
+    expect(w2.locators.compileAllMenuItem.names).toContain('转换(+全部编译)')
+    // Calibrated build chain (structured project, 2026-10-01): VSFlexGrid8N is
+    // read through MSAA, errors are the exact 结果 cell, status bar has no
+    // compile info so settle is rows-only.
+    expect(w2.msaa.outputListReader).toBe('msaa-grid')
+    expect(w2.outputErrorPattern).toBeInstanceOf(RegExp)
+    expect(w2.outputErrorPattern?.test('1 | Error | POU_01 | 编译程序 | 没有找到算式。 | C8042')).toBe(true)
+    expect(w2.outputErrorPattern?.test('No. | 结果 | 数据名 | 分类 | 内容 | 错误代码')).toBe(false)
+    expect(w2.outputErrorPattern?.test('1 | CheckWarning | POU_01 | 双线圈 | C9300')).toBe(false)
+    expect(w3.msaa.outputListReader).toBeUndefined()
+    expect(w3.outputErrorPattern).toBeUndefined()
     for (const profile of Object.values(GX_PROFILES)) {
       expect(profile.msaa.toolbarClassName.length).toBeGreaterThan(0)
       expect(profile.msaa.minMenuPathSegments).toBeGreaterThan(0)
@@ -345,7 +374,28 @@ describe('GxWindowOps target=works2', () => {
     ).rejects.toThrow(/结构化工程/)
   })
 
-  it('falls back to rows-only settle detection when no status bar is configured', async () => {
+  it('trusts the focused RichEdit20W as the Works2 ST editor without searching', async () => {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
+    fake.focusedClassName = 'RichEdit20W'
+    const focused = await makeOps(fake, { target: 'works2' }).focusEditor(7, 'POU_01')
+    expect(focused.className).toBe('RichEdit20W')
+    expect(fake.calls.some((c) => c.op === 'focusElement')).toBe(false)
+  })
+
+  it('detects the false clipboard MATCH when focus is not in a text control', async () => {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
+    // Live-observed failure mode: focus lands on the project-tree item, ^v/^c
+    // both no-op and the clipboard still holds the pasted code — the old
+    // round-trip reported a bogus MATCH and the build compiled stale code.
+    fake.copyEnabled = false
+    await expect(
+      makeOps(fake, { target: 'works2' }).writeSt({ blockName: 'POU_01', stCode: 'Y10 := M0;' })
+    ).rejects.toThrow(/复制回读未发生（剪贴板哨兵未被覆盖）/)
+  })
+
+  it('falls back to rows-only settle detection when the status bar cannot be read', async () => {
     const fake = new FakeWorker()
     fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
     let n = 0
@@ -358,5 +408,48 @@ describe('GxWindowOps target=works2', () => {
     expect(result.settled).toBe(true)
     expect(result.statusBarText).toBeUndefined()
     expect(result.errors).toEqual([])
+    // The VSFlexGrid8N grid is read through the MSAA grid walker, not UIA, and
+    // the confirm dialog is located via the top-level scan only (empty-titled
+    // child #32770 MDI containers would otherwise swallow the ENTER).
+    expect(fake.calls.find((c) => c.op === 'readOutputList')?.params.reader).toBe('msaa-grid')
+    expect(fake.calls.find((c) => c.op === 'findDialog')?.params.search).toBe('top-level')
+  })
+
+  it('classifies Works2 build errors by the 结果 cell, not the row text', async () => {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
+    // Live-calibrated shape (2026-10-01): header row + warning rows + the
+    // C8042 error row joined from grid cell values.
+    let n = 0
+    fake.readRows = () => {
+      n++
+      if (n === 1) {
+        return []
+      }
+      return [
+        'No. | 结果 | 数据名 | 分类 | 内容 | 错误代码',
+        '1 | Error | POU_01 | 编译程序 | 没有找到算式。 | C8042',
+        '2 | CheckWarning | POU_01 | 双线圈/梯形图/一致性检查 | \'M0\'为双线圈。 | C9300'
+      ]
+    }
+    const result = await makeOps(fake, { target: 'works2' }).build('all')
+    expect(result.errors).toEqual(['1 | Error | POU_01 | 编译程序 | 没有找到算式。 | C8042'])
+    expect(result.outputLines).toHaveLength(3)
+    expect(result.settled).toBe(true)
+  })
+
+  it('hard-fails when the Works2 confirm dialog survives ENTER (stale-grid guard)', async () => {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
+    // Simulates the misrouted-ENTER failure observed live: the dialog stays
+    // open, the compile never runs and the grid would keep the PREVIOUS rows.
+    fake.dialogSticks = true
+    let n = 0
+    fake.readRows = () => {
+      n++
+      if (n === 1) return ['1 | Error | POU_01 | 编译程序 | 没有找到算式。 | C8042']
+      return ['1 | Error | POU_01 | 编译程序 | 没有找到算式。 | C8042']
+    }
+    await expect(makeOps(fake, { target: 'works2' }).build('all')).rejects.toThrow(/确认对话框在 ENTER 后未关闭/)
   })
 })
