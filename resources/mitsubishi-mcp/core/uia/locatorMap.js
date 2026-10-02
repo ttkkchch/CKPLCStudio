@@ -14,7 +14,7 @@
  * (windowOps focusElement etc.) stays exact-name OR'd.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GX_BUILD_CONFIRM_KEYS = exports.GX_ST_PASTE_KEYS = exports.GX_ST_COPY_KEYS = exports.GX_ST_SELECT_ALL_KEYS = exports.GX_OUTPUT_ERROR_PATTERN = exports.GX_OUTPUT_GRID_CONTROL_TYPES = exports.GX_PROFILES = void 0;
+exports.GX_SIM_PROCESS_NAMES = exports.GX_PLC_WRITE_CLOSE_BUTTON = exports.GX_PLC_WRITE_DIALOG_TITLE = exports.GX_BUILD_CONFIRM_KEYS = exports.GX_ST_PASTE_KEYS = exports.GX_ST_COPY_KEYS = exports.GX_ST_SELECT_ALL_KEYS = exports.GX_OUTPUT_ERROR_PATTERN = exports.GX_OUTPUT_GRID_CONTROL_TYPES = exports.GX_PROFILES = void 0;
 exports.getGxProfile = getGxProfile;
 exports.isGxTarget = isGxTarget;
 const WORKS3_PROFILE = {
@@ -74,6 +74,12 @@ const WORKS2_PROFILE = {
         // Calibrated: 转换(+全部编译)(全部程序)(R); the prefix distinguishes it
         // from 转换(+编译)(B) under the same StartsWith rule.
         compileAllMenuItem: { names: ['转换(+全部编译)', 'Convert(+Compile All)'] },
+        // Calibrated sim-start (probe_w2_27/29/30/31, 2026-10-01): a single BFS
+        // click on the 模拟-prefixed item of the 菜单栏 XTPToolBar starts/stops the
+        // simulator WITHOUT pre-expanding the menu. Clicking twice is expected
+        // after a simulator kill: works2 still believes it is simulating, so the
+        // first click takes the no-op stop path and only the second starts.
+        simStartMenuItem: { names: ['模拟'] },
         outputPane: { names: ['输出', 'Output', '出力'], controlType: 'Window' }
     },
     msaa: {
@@ -88,7 +94,11 @@ const WORKS2_PROFILE = {
         // accValue, not UIA names, so rows are read through the MSAA grid walker.
         outputListReader: 'msaa-grid',
         // Menu leaves sit at BAR>item>popup>leaf = 3 segments (no CANVAS layer).
-        minMenuPathSegments: 3
+        minMenuPathSegments: 3,
+        // Calibrated sim-start: the menu bar is the XTPToolBar whose UIA Name is
+        // exactly 菜单栏 — other toolbars have same-caption 模拟 items that would
+        // be clicked by mistake when only filtered by class name.
+        menuBarName: '菜单栏'
     },
     // Result rows join as "1 | Error | POU_01 | 编译程序 | ... | C8042"; match the
     // 结果 cell exactly so the header row (…| 错误代码) and CheckWarning rows
@@ -133,3 +143,14 @@ exports.GX_ST_PASTE_KEYS = '^v';
  * build — only ENTER on the foregrounded dialog actually starts the conversion.
  */
 exports.GX_BUILD_CONFIRM_KEYS = '{ENTER}';
+/**
+ * Auto PLC-write dialog shown by works2 when a simulation starts (probe_w2_31,
+ * 2026-10-01): a top-level #32770 titled exactly PLC写入. Without 「处理结束时
+ * 自动关闭」checked it stays open forever after reaching 100/100% — the
+ * simulator then runs an EMPTY program (SM400 scans but the logic never
+ * transfers) — so the flow must click its 关闭 pushbutton (MSAA role 43).
+ */
+exports.GX_PLC_WRITE_DIALOG_TITLE = 'PLC写入';
+exports.GX_PLC_WRITE_CLOSE_BUTTON = '关闭';
+/** Simulator processes killed for a clean restart before gx_sim_start. */
+exports.GX_SIM_PROCESS_NAMES = ['QuteSimRun', 'SimManager'];

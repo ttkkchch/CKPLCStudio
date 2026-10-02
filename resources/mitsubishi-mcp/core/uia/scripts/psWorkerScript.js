@@ -201,6 +201,62 @@ public static class GxMsaa {
         }
         return rowsOut;
     }
+
+    // Depth-1 child names of the MSAA root. The works2 PLC写入 dialog (a plain
+    // MFC #32770) exposes its progress as depth-1 child accNames like
+    // "52/100%" — no tree walk needed (calibrated probe_w2_31, 2026-10-01).
+    public static List<string> ChildNames(IntPtr hwnd) {
+        var names = new List<string>();
+        IAccessible root = FromWindow(hwnd);
+        if (root == null) return names;
+        int n = 0;
+        try { n = root.accChildCount; } catch {}
+        if (n <= 0) return names;
+        object[] kids = new object[n];
+        int got;
+        if (AccessibleChildren(root, 0, n, kids, out got) != 0) return names;
+        for (int i = 0; i < got; i++) {
+            IAccessible ka = kids[i] as IAccessible;
+            if (ka == null) continue;
+            string v = null;
+            try { v = ka.get_accName(0) as string; } catch {}
+            if (!string.IsNullOrEmpty(v)) names.Add(v);
+        }
+        return names;
+    }
+
+    // BFS click on a PUSHBUTTON (MSAA role 43) whose name starts with the
+    // prefix — calibrated on the works2 PLC写入 dialog's 关闭 button
+    // (probe_w2_31, 2026-10-01).
+    public static string ClickPushButton(IntPtr hwnd, string namePrefix) {
+        IAccessible root = FromWindow(hwnd);
+        if (root == null) return "NO-ACC";
+        var qa = new Queue<KeyValuePair<IAccessible, int>>();
+        var qp = new Queue<string>();
+        qa.Enqueue(new KeyValuePair<IAccessible, int>(root, 0));
+        qp.Enqueue("D");
+        int visited = 0;
+        while (qa.Count > 0 && visited < 600) {
+            var cur = qa.Dequeue();
+            string path = qp.Dequeue();
+            visited++;
+            IAccessible pa = cur.Key;
+            int cid = cur.Value;
+            string name = NameOf(pa, cid);
+            int role = 0;
+            try { role = Convert.ToInt32(pa.get_accRole(cid)); } catch {}
+            if (role == 43 && name != null && name.StartsWith(namePrefix, StringComparison.Ordinal)) {
+                try {
+                    pa.accDoDefaultAction(cid);
+                    return "CLICKED " + path + " [" + name + "]";
+                } catch (Exception ex) {
+                    return "CLICK-ERR " + path + " : " + ex.Message;
+                }
+            }
+            if (cid == 0) EnqueueKids(pa, qa, qp, path);
+        }
+        return "NOT-FOUND(" + visited + ")";
+    }
 }
 '@ -ReferencedAssemblies Accessibility.dll
 }
@@ -454,6 +510,11 @@ function Invoke-Op([string]$op, $params) {
             if ($params.minSegments) { $minSeg = [int]$params.minSegments }
             $tbCls = 'XTPToolBar'
             if ($params.toolbarClassName) { $tbCls = [string]$params.toolbarClassName }
+            # Optional exact-name filter for the ONE toolbar that is the menu
+            # bar (works2 sim-start: 菜单栏). Other toolbars carry same-caption
+            # buttons (模拟开始 etc.) that a class-only filter would click.
+            $mbName = $null
+            if ($params.menuBarName) { $mbName = [string]$params.menuBarName }
             $root = Get-RootElementFor $params.rootHandle
             # Codejock draws its own menus, so the MSAA menu bar is one of the
             # XTP* toolbars; same-caption toolbar BUTTONS sit too shallow and
@@ -463,6 +524,7 @@ function Invoke-Op([string]$op, $params) {
             $i = 0
             foreach ($b in $bars) {
                 $i++
+                if ($mbName -and ([string]$b.Current.Name -ne $mbName)) { continue }
                 $bh = [IntPtr]$b.Current.NativeWindowHandle
                 if ($bh -eq [IntPtr]::Zero) { continue }
                 $p = [GxMsaa]::FindPath($bh, [string]$params.itemName, $minSeg)
@@ -471,10 +533,51 @@ function Invoke-Op([string]$op, $params) {
                     return @{ clicked = $c.StartsWith('CLICKED'); result = $c; path = $c; barIndex = $i; strategy = 'toolbar' }
                 }
             }
+            if ($mbName) {
+                # No root fallback when the caller pinned the menu bar — a BFS
+                # from the window root would hit the very toolbar buttons the
+                # filter exists to avoid.
+                $miss = 'NOT-FOUND(menu-bar "' + $mbName + '")'
+                return @{ clicked = $false; result = $miss; path = $miss; barIndex = 0; strategy = 'toolbar' }
+            }
             # Fallback: BFS from the window root itself (menu bar is not an XTP* toolbar).
             $h = [IntPtr][int64]$params.rootHandle
             $c2 = [GxMsaa]::ClickItem($h, [string]$params.itemName, $minSeg)
             return @{ clicked = $c2.StartsWith('CLICKED'); result = $c2; path = $c2; barIndex = 0; strategy = 'root' }
+        }
+        'dialogProgress' {
+            if (-not $params.handle) { throw 'dialogProgress requires params.handle' }
+            $names = [GxMsaa]::ChildNames([IntPtr][int64]$params.handle)
+            return @{ texts = @($names) }
+        }
+        'clickDialogButton' {
+            if (-not $params.handle) { throw 'clickDialogButton requires params.handle' }
+            if (-not $params.name) { throw 'clickDialogButton requires params.name' }
+            $r = [GxMsaa]::ClickPushButton([IntPtr][int64]$params.handle, [string]$params.name)
+            return @{ clicked = $r.StartsWith('CLICKED'); result = $r }
+        }
+        'findProcess' {
+            $running = @()
+            foreach ($n in @($params.names)) {
+                $p = Get-Process -Name ([string]$n) -ErrorAction SilentlyContinue
+                if ($p) { $running += @{ name = [string]$n; pid = [int](@($p)[0].Id) } }
+            }
+            return @{ running = @($running) }
+        }
+        'stopProcess' {
+            $killed = @()
+            $missing = @()
+            foreach ($n in @($params.names)) {
+                $p = Get-Process -Name ([string]$n) -ErrorAction SilentlyContinue
+                if ($p) {
+                    $pids = (@($p) | ForEach-Object { [string]$_.Id }) -join ','
+                    @($p) | Stop-Process -Force
+                    $killed += ("{0}({1})" -f ([string]$n), $pids)
+                } else {
+                    $missing += [string]$n
+                }
+            }
+            return @{ killed = @($killed); missing = @($missing) }
         }
         'findDialog' {
             if (-not $params.className) { throw 'findDialog requires params.className' }

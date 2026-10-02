@@ -33,6 +33,19 @@ class FakeWorker implements PsWorkerLike {
   /** XTPStatusBar UIA Name per status-bar read (function = dynamic sequence). */
   statusText: string | (() => string) = ''
   dockTabs: string[] = ['输出']
+  /** Running simulator process names reported by findProcess. */
+  processes: string[] = []
+  /** null → legacy dialog behavior; else the per-call top-level dialog list. */
+  plcWriteDialogs: (() => ElementInfo[]) | null = null
+  /** PLC写入 progress texts per dialogProgress call (function = dynamic). */
+  plcWriteTexts: (() => string[]) | null = null
+  clickDialogButtonOk = true
+  /** >0 → the next N msaaClickMenu ops throw (simulated op timeout). */
+  menuClickFailTimes = 0
+  /** Hook fired on every MSAA menu click (drives simulated sim start). */
+  onMenuClick?: () => void
+  /** Hook fired when the dialog button click succeeds. */
+  onDialogButtonClick?: () => void
 
   async call<T = unknown>(op: string, params: Record<string, unknown> = {}): Promise<T> {
     this.calls.push({ op, params })
@@ -66,6 +79,11 @@ class FakeWorker implements PsWorkerLike {
         return { focused: { name: String((params.names as string[])[0]) } } as T
       case 'msaaClickMenu': {
         const item = String(params.itemName)
+        if (this.menuClickFailTimes > 0) {
+          this.menuClickFailTimes--
+          throw new Error('op "msaaClickMenu" timed out after 20000ms; worker killed')
+        }
+        this.onMenuClick?.()
         if (!this.menuClickOk) {
           const miss = `NOT-FOUND(123) for ${item}`
           return { clicked: false, result: miss, path: miss, barIndex: 0, strategy: 'root' } as T
@@ -74,11 +92,33 @@ class FakeWorker implements PsWorkerLike {
         return { clicked: true, result: path, path, barIndex: 1, strategy: 'toolbar' } as T
       }
       case 'findDialog': {
+        if (this.plcWriteDialogs) {
+          const list = this.plcWriteDialogs()
+          return { dialogs: list, total: list.length } as T
+        }
         if (!this.dialogFound) return { dialogs: [], total: 0 } as T
         return {
           dialogs: [{ handle: 200, name: '全部转换', className: String(params.className), controlType: 'Window' }],
           total: 1
         } as T
+      }
+      case 'stopProcess': {
+        const names = (params.names as string[]) ?? []
+        return {
+          killed: names.filter((n) => n === 'QuteSimRun').map((n) => `${n}(123)`),
+          missing: names.filter((n) => n !== 'QuteSimRun')
+        } as T
+      }
+      case 'findProcess':
+        return { running: this.processes.map((name, i) => ({ name, pid: 1000 + i })) } as T
+      case 'dialogProgress': {
+        if (!this.plcWriteTexts) return { texts: [] } as T
+        return { texts: this.plcWriteTexts() } as T
+      }
+      case 'clickDialogButton': {
+        if (!this.clickDialogButtonOk) return { clicked: false, result: 'NOT-FOUND(42)' } as T
+        this.onDialogButtonClick?.()
+        return { clicked: true, result: 'CLICKED D>c2 [关闭]' } as T
       }
       case 'findElements': {
         const cls = (params.classNames as string[] | undefined)?.[0] ?? ''
@@ -451,5 +491,148 @@ describe('GxWindowOps target=works2', () => {
       return ['1 | Error | POU_01 | 编译程序 | 没有找到算式。 | C8042']
     }
     await expect(makeOps(fake, { target: 'works2' }).build('all')).rejects.toThrow(/确认对话框在 ENTER 后未关闭/)
+  })
+})
+
+/** Short sim-start timings so Date.now()-driven loops stay fast in tests. */
+const SIM_OPTS: Partial<WindowOpsOptions> = {
+  target: 'works2',
+  simProcessWaitMs: 30,
+  plcWriteTimeoutMs: 200,
+  plcWriteGraceMs: 40,
+  pollMs: 1
+}
+
+function makeSimOps(fake: FakeWorker): GxWindowOps {
+  return makeOps(fake, SIM_OPTS)
+}
+
+describe('GxWindowOps.simStart', () => {
+  function makeStartedFake(clicksToStart = 1): FakeWorker {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
+    let clicks = 0
+    let closed = false
+    fake.onMenuClick = () => {
+      clicks++
+      if (clicks >= clicksToStart) fake.processes = ['QuteSimRun']
+    }
+    fake.onDialogButtonClick = () => {
+      closed = true
+    }
+    fake.plcWriteDialogs = () =>
+      clicks >= clicksToStart && !closed ? [{ handle: 300, name: 'PLC写入', className: '#32770', controlType: 'Window' }] : []
+    let polls = 0
+    fake.plcWriteTexts = () => {
+      polls++
+      return polls === 1 ? ['模拟写入 52/100%'] : ['模拟写入 100/100%']
+    }
+    return fake
+  }
+
+  it('rejects works3 (Simulator3 flow is uncalibrated)', async () => {
+    const fake = new FakeWorker()
+    await expect(makeOps(fake, { ...SIM_OPTS, target: 'works3' }).simStart()).rejects.toThrow('仅支持 target=works2')
+  })
+
+  it('kills the simulator, starts with one click and closes the write dialog at 100%', async () => {
+    const fake = makeStartedFake(1)
+    const result = await makeSimOps(fake).simStart()
+    expect(result.ok).toBe(true)
+    expect(result.killedProcesses).toEqual(['QuteSimRun(123)'])
+    expect(result.simClicks).toBe(1)
+    expect(result.plcWriteClosedBy).toBe('close-button')
+    expect(result.lastProgress).toContain('100/100%')
+    expect(result.title).toContain('GX Works2')
+    // The menu click goes through the pinned works2 menu bar.
+    const menu = fake.calls.find((c) => c.op === 'msaaClickMenu')
+    expect(menu?.params.itemName).toBe('模拟')
+    expect(menu?.params.menuBarName).toBe('菜单栏')
+    expect(menu?.params.minSegments).toBe(2)
+    // Clean restart kills BOTH simulator processes before clicking.
+    const kill = fake.calls.find((c) => c.op === 'stopProcess')
+    expect(kill?.params.names).toEqual(['QuteSimRun', 'SimManager'])
+    // The write dialog's 关闭 pushbutton is clicked on the dialog handle.
+    const close = fake.calls.find((c) => c.op === 'clickDialogButton')
+    expect(close?.params.name).toBe('关闭')
+    expect(close?.params.handle).toBe(300)
+    // No stray dialogs existed → no ESC was ever sent.
+    expect(fake.calls.some((c) => c.op === 'sendKeys')).toBe(false)
+  })
+
+  it('clicks a second time when the first click takes the no-op stop path', async () => {
+    const fake = makeStartedFake(2)
+    const result = await makeSimOps(fake).simStart()
+    expect(result.simClicks).toBe(2)
+    expect(fake.calls.filter((c) => c.op === 'msaaClickMenu')).toHaveLength(2)
+  })
+
+  it('recovers when the menu click op times out (late modal blocks MSAA) and retries', async () => {
+    const fake = makeStartedFake(1)
+    // Live-observed (2026-10-02 smoke): a late "simulator disconnected" modal
+    // blocks the MSAA calls and the op times out; the worker respawns lazily.
+    fake.menuClickFailTimes = 1
+    const result = await makeSimOps(fake).simStart()
+    expect(result.ok).toBe(true)
+    expect(result.simClicks).toBe(2)
+    expect(fake.calls.filter((c) => c.op === 'msaaClickMenu')).toHaveLength(2)
+  })
+
+  it('ESC-closes stray dialogs left by the killed simulator before clicking', async () => {
+    const fake = makeStartedFake(1)
+    let scans = 0
+    let closed = false
+    fake.onDialogButtonClick = () => {
+      closed = true
+    }
+    fake.plcWriteDialogs = () => {
+      scans++
+      if (closed) return []
+      if (scans === 1) return [{ handle: 400, name: '模拟错误', className: '#32770', controlType: 'Window' }]
+      return fake.processes.length > 0 ? [{ handle: 300, name: 'PLC写入', className: '#32770', controlType: 'Window' }] : []
+    }
+    const result = await makeSimOps(fake).simStart()
+    expect(result.strayDialogsClosed).toBe(1)
+    expect(fake.calls.some((c) => c.op === 'sendKeys' && c.params.keys === '{ESC}')).toBe(true)
+  })
+
+  it('reports not-seen when the write dialog never appears within the grace window', async () => {
+    const fake = makeStartedFake(1)
+    fake.plcWriteDialogs = () => []
+    const result = await makeSimOps(fake).simStart()
+    expect(result.plcWriteClosedBy).toBe('not-seen')
+    expect(fake.calls.some((c) => c.op === 'clickDialogButton')).toBe(false)
+  })
+
+  it('hard-fails with the last progress when the write dialog hangs below 100%', async () => {
+    const fake = makeStartedFake(1)
+    // Live-observed failure mode: 「处理结束时自动关闭」unchecked and the
+    // transfer stuck — the dialog sits open and the simulator stays empty.
+    fake.plcWriteTexts = () => ['模拟写入 52/100%']
+    await expect(makeSimOps(fake).simStart()).rejects.toThrow(/未完成写入[\s\S]*52\/100%[\s\S]*处理结束时自动关闭/)
+  })
+
+  it('hard-fails when the 关闭 pushbutton cannot be clicked at 100%', async () => {
+    const fake = makeStartedFake(1)
+    fake.clickDialogButtonOk = false
+    await expect(makeSimOps(fake).simStart()).rejects.toThrow(/已达 100% 但点击「关闭」失败/)
+  })
+
+  it('hard-fails when the MSAA menu click never lands', async () => {
+    const fake = makeStartedFake(1)
+    fake.menuClickOk = false
+    await expect(makeSimOps(fake).simStart()).rejects.toThrow(/MSAA 菜单点击失败/)
+    expect(fake.calls.filter((c) => c.op === 'msaaClickMenu')).toHaveLength(1)
+  })
+
+  it('hard-fails when QuteSimRun never starts after all click attempts', async () => {
+    const fake = makeStartedFake(1)
+    // Menu clicks "succeed" but never bring the simulator up — disable the
+    // auto-start hook AND clear the process list.
+    fake.onMenuClick = () => {}
+    fake.processes = []
+    await expect(makeSimOps(fake).simStart()).rejects.toThrow(/始终未启动/)
+    expect(fake.calls.filter((c) => c.op === 'msaaClickMenu')).toHaveLength(3)
+    expect(fake.calls.some((c) => c.op === 'dialogProgress')).toBe(false)
   })
 })

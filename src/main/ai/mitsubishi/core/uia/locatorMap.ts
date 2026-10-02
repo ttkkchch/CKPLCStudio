@@ -61,6 +61,13 @@ export interface GxMsaaLocators {
    * segments while menu items are >=4 (root>转换(C)>转换(C)>全部转换(R)).
    */
   readonly minMenuPathSegments: number
+  /**
+   * UIA Name of the ONE XTPToolBar that is the menu bar (works2: 菜单栏).
+   * When set, msaaClickMenu only searches this bar and skips the root
+   * fallback — other toolbars carry same-caption buttons (e.g. 模拟开始) that
+   * a class-only filter would click instead (calibrated live 2026-10-01).
+   */
+  readonly menuBarName?: string
 }
 
 /** Per-generation profile: how to find the window, compile menus and output pane. */
@@ -80,6 +87,11 @@ export interface GxPlatformProfile {
     compileMenu: GxUiLocator
     /** Compile-all command inside the compile menu (MSAA StartsWith prefix). */
     compileAllMenuItem: GxUiLocator
+    /**
+     * Simulation start/stop command (MSAA StartsWith prefix). Optional — only
+     * set when a generation's sim-start flow is live-calibrated (works2).
+     */
+    simStartMenuItem?: GxUiLocator
     /** Dockable Output window pane that receives build diagnostics. */
     outputPane: GxUiLocator
   }
@@ -166,6 +178,12 @@ const WORKS2_PROFILE: GxPlatformProfile = {
     // Calibrated: 转换(+全部编译)(全部程序)(R); the prefix distinguishes it
     // from 转换(+编译)(B) under the same StartsWith rule.
     compileAllMenuItem: { names: ['转换(+全部编译)', 'Convert(+Compile All)'] },
+    // Calibrated sim-start (probe_w2_27/29/30/31, 2026-10-01): a single BFS
+    // click on the 模拟-prefixed item of the 菜单栏 XTPToolBar starts/stops the
+    // simulator WITHOUT pre-expanding the menu. Clicking twice is expected
+    // after a simulator kill: works2 still believes it is simulating, so the
+    // first click takes the no-op stop path and only the second starts.
+    simStartMenuItem: { names: ['模拟'] },
     outputPane: { names: ['输出', 'Output', '出力'], controlType: 'Window' }
   },
   msaa: {
@@ -180,7 +198,11 @@ const WORKS2_PROFILE: GxPlatformProfile = {
     // accValue, not UIA names, so rows are read through the MSAA grid walker.
     outputListReader: 'msaa-grid',
     // Menu leaves sit at BAR>item>popup>leaf = 3 segments (no CANVAS layer).
-    minMenuPathSegments: 3
+    minMenuPathSegments: 3,
+    // Calibrated sim-start: the menu bar is the XTPToolBar whose UIA Name is
+    // exactly 菜单栏 — other toolbars have same-caption 模拟 items that would
+    // be clicked by mistake when only filtered by class name.
+    menuBarName: '菜单栏'
   },
   // Result rows join as "1 | Error | POU_01 | 编译程序 | ... | C8042"; match the
   // 结果 cell exactly so the header row (…| 错误代码) and CheckWarning rows
@@ -232,3 +254,15 @@ export const GX_ST_PASTE_KEYS = '^v'
  * build — only ENTER on the foregrounded dialog actually starts the conversion.
  */
 export const GX_BUILD_CONFIRM_KEYS = '{ENTER}'
+
+/**
+ * Auto PLC-write dialog shown by works2 when a simulation starts (probe_w2_31,
+ * 2026-10-01): a top-level #32770 titled exactly PLC写入. Without 「处理结束时
+ * 自动关闭」checked it stays open forever after reaching 100/100% — the
+ * simulator then runs an EMPTY program (SM400 scans but the logic never
+ * transfers) — so the flow must click its 关闭 pushbutton (MSAA role 43).
+ */
+export const GX_PLC_WRITE_DIALOG_TITLE = 'PLC写入'
+export const GX_PLC_WRITE_CLOSE_BUTTON = '关闭'
+/** Simulator processes killed for a clean restart before gx_sim_start. */
+export const GX_SIM_PROCESS_NAMES = ['QuteSimRun', 'SimManager'] as const

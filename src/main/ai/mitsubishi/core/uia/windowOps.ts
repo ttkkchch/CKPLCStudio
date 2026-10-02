@@ -19,6 +19,9 @@ import {
   GX_BUILD_CONFIRM_KEYS,
   GX_OUTPUT_ERROR_PATTERN,
   GX_OUTPUT_GRID_CONTROL_TYPES,
+  GX_PLC_WRITE_CLOSE_BUTTON,
+  GX_PLC_WRITE_DIALOG_TITLE,
+  GX_SIM_PROCESS_NAMES,
   GX_ST_COPY_KEYS,
   GX_ST_PASTE_KEYS,
   GX_ST_SELECT_ALL_KEYS,
@@ -72,6 +75,24 @@ export interface BuildResult {
   dockTabNames?: string[]
 }
 
+export interface SimStartResult {
+  ok: true
+  /** works2 main window title the flow attached to */
+  title: string
+  /** simulator processes force-killed for a clean restart, as name(pids) */
+  killedProcesses: string[]
+  /** stray dialogs dismissed with ESC before the menu click */
+  strayDialogsClosed: number
+  /** 模拟 menu clicks sent (1 = fresh start, 2 = restart after the kill) */
+  simClicks: number
+  /** MSAA evidence path of the LAST 模拟 menu click */
+  simMenuPath: string
+  /** how the auto PLC写入 dialog ended */
+  plcWriteClosedBy: 'close-button' | 'auto' | 'not-seen'
+  /** last progress text observed inside the PLC写入 dialog */
+  lastProgress?: string
+}
+
 export interface WindowOpsOptions {
   sleep?: (ms: number) => Promise<void>
   /** build-output poll interval (ms) */
@@ -82,6 +103,12 @@ export interface WindowOpsOptions {
   buildTimeoutMs?: number
   /** how long to wait for the modal rebuild dialog to appear (ms) */
   dialogWaitMs?: number
+  /** per-click wait for the QuteSimRun process after a 模拟 menu click (ms) */
+  simProcessWaitMs?: number
+  /** hard deadline for the PLC写入 dialog to finish writing (ms) */
+  plcWriteTimeoutMs?: number
+  /** how long the PLC写入 dialog may take to first appear (ms) */
+  plcWriteGraceMs?: number
   /** GX Works generation to operate on (default 'works3') */
   target?: GxTarget
 }
@@ -121,6 +148,9 @@ export class GxWindowOps {
   private readonly settlePolls: number
   private readonly buildTimeoutMs: number
   private readonly dialogWaitMs: number
+  private readonly simProcessWaitMs: number
+  private readonly plcWriteTimeoutMs: number
+  private readonly plcWriteGraceMs: number
   private readonly profile: GxPlatformProfile
 
   constructor(worker: PsWorkerLike, options: WindowOpsOptions = {}) {
@@ -130,6 +160,9 @@ export class GxWindowOps {
     this.settlePolls = options.settlePolls ?? 2
     this.buildTimeoutMs = options.buildTimeoutMs ?? 120_000
     this.dialogWaitMs = options.dialogWaitMs ?? 3_000
+    this.simProcessWaitMs = options.simProcessWaitMs ?? 8_000
+    this.plcWriteTimeoutMs = options.plcWriteTimeoutMs ?? 60_000
+    this.plcWriteGraceMs = options.plcWriteGraceMs ?? 15_000
     this.profile = getGxProfile(options.target ?? 'works3')
   }
 
@@ -448,6 +481,232 @@ export class GxWindowOps {
     const win = await this.attach()
     const lines = (await this.tryReadOutputLines(win.handle)) ?? []
     return lines.filter((line) => this.outputErrorPattern().test(line))
+  }
+
+  /**
+   * Start GX Simulator2 from works2 and shepherd the automatic PLC write to
+   * completion (works2 only — works3's Simulator3 flow is uncalibrated).
+   *
+   * Live-calibrated sequence (probe_w2_27/29/30/31, 2026-10-01):
+   * 1. force-kill QuteSimRun/SimManager for a CLEAN restart — works2 then
+   *    re-runs the auto PLC write on the next start instead of reusing a
+   *    stale (post-kill zeroed) device image;
+   * 2. ESC away stray top-level #32770 dialogs left by the kill (they would
+   *    swallow the menu click);
+   * 3. single-BFS MSAA click on the 模拟-prefixed item of the 菜单栏 toolbar,
+   *    WITHOUT pre-expanding the menu (an expanded MSAA tree misleads the
+   *    BFS). After a kill works2 still believes it is simulating, so the
+   *    first click takes the no-op stop path — if QuteSimRun does not appear
+   *    within `simProcessWaitMs`, click once more (verified restart toggle);
+   * 4. watch the auto PLC写入 dialog (titled top-level #32770): without
+   *    「处理结束时自动关闭」checked it sits at 100/100% forever and the
+   *    simulator keeps running an EMPTY program — so once the progress text
+   *    reaches 100/100%, click its 关闭 pushbutton (MSAA role 43) and verify
+   *    the dialog closes.
+   */
+  async simStart(): Promise<SimStartResult> {
+    if (this.profile.target !== 'works2') {
+      throw new Error('gx_sim_start 目前仅支持 target=works2（GX Works3 的 Simulator3 启动流程尚未校准）')
+    }
+    const item = this.profile.locators.simStartMenuItem
+    const menuBarName = this.profile.msaa.menuBarName
+    if (!item || !menuBarName) {
+      throw new Error(`${this.profile.displayName} profile 缺少仿真启动定位配置（simStartMenuItem/menuBarName）`)
+    }
+    const win = await this.attach()
+    const itemName = (asNames(item.names) ?? [''])[0]
+
+    // 1) Clean restart: kill any running simulator so works2 re-runs the auto
+    //    PLC write instead of reusing the post-kill zeroed device image.
+    const kill = await this.worker.call<{ killed: string[]; missing: string[] }>('stopProcess', {
+      names: [...GX_SIM_PROCESS_NAMES]
+    })
+    await this.sleep(2000)
+
+    // 2) Stray dialogs would swallow the menu click. They pop in WAVES after
+    //    the kill (the disconnect error can lag several seconds), so scan,
+    //    settle and scan a second time before clicking.
+    let strayDialogsClosed = await this.closeStrayDialogs(win.handle)
+    await this.sleep(3000)
+    strayDialogsClosed += await this.closeStrayDialogs(win.handle)
+
+    // 3) Start the simulation (double-click toggle after a kill — see above).
+    //    A click op itself can time out when a late modal error dialog blocks
+    //    the MSAA/UIA calls; the worker respawns lazily, so catch, re-ESC and
+    //    retry with a generous per-op timeout.
+    let simClicks = 0
+    let simMenuPath = ''
+    let running = false
+    for (const attempt of [1, 2, 3]) {
+      let click: { clicked: boolean; path: string }
+      try {
+        click = await this.worker.call<{ clicked: boolean; path: string }>(
+          'msaaClickMenu',
+          {
+            rootHandle: win.handle,
+            itemName,
+            menuBarName,
+            // Menu-bar BFS: a top menu item sits at 2 segments (root>模拟(S)); a
+            // nested leaf at 3. BFS order clicks the shallowest match first.
+            minSegments: 2
+          },
+          45_000
+        )
+      } catch (err) {
+        simClicks = attempt
+        simMenuPath = err instanceof Error ? err.message : String(err)
+        await this.closeStrayDialogs(win.handle)
+        continue
+      }
+      simClicks = attempt
+      simMenuPath = click.path
+      if (!click.clicked) {
+        throw new Error(
+          `MSAA 菜单点击失败（${click.path}）——未触发「${itemName}」菜单项；` +
+            `请确认 ${this.profile.displayName} 已打开工程且窗口未最小化`
+        )
+      }
+      running = await this.waitForSimProcess(this.simProcessWaitMs)
+      if (running) break
+    }
+    if (!running) {
+      throw new Error(
+        `已点击「${itemName}」菜单 ${simClicks} 次但模拟器进程（QuteSimRun）始终未启动（最后一次: ${simMenuPath}）——` +
+          `请确认工程支持模拟且通信设置正确`
+      )
+    }
+
+    // 4) Shepherd the auto PLC write dialog (empty-program guard — see above).
+    let plcWriteSeen = false
+    let closedBy: SimStartResult['plcWriteClosedBy'] = 'not-seen'
+    let lastProgress: string | undefined
+    let gonePolls = 0
+    const writeDeadline = Date.now() + this.plcWriteTimeoutMs
+    const seenGraceDeadline = Date.now() + this.plcWriteGraceMs
+    while (true) {
+      await this.sleep(this.pollMs)
+      const dlg = await this.findPlcWriteDialog(win.handle)
+      if (!dlg || !dlg.handle) {
+        if (!plcWriteSeen) {
+          if (Date.now() >= seenGraceDeadline) break // never appeared — write finished instantly or not needed
+          continue
+        }
+        gonePolls++
+        if (gonePolls >= 2) {
+          closedBy = 'auto' // vanished without our click (auto-close was checked)
+          break
+        }
+        continue
+      }
+      plcWriteSeen = true
+      gonePolls = 0
+      let joined = ''
+      try {
+        const texts = await this.worker.call<{ texts: string[] }>('dialogProgress', { handle: dlg.handle })
+        joined = (texts.texts ?? []).join(' ')
+      } catch {
+        /* transient MSAA hiccup — the next poll retries */
+      }
+      if (joined) lastProgress = joined
+      if (!/\b100\s*\/\s*100\s*%/.test(joined)) {
+        if (Date.now() >= writeDeadline) {
+          throw new Error(
+            `「${GX_PLC_WRITE_DIALOG_TITLE}」对话框在 ${Math.round(this.plcWriteTimeoutMs / 1000)}s 内未完成写入` +
+              `（最后进度: ${lastProgress ?? '不可读'}）——请在对话框中勾选「处理结束时自动关闭」后重试`
+          )
+        }
+        continue
+      }
+      // Progress complete — let the dialog settle, click 关闭, verify it closes.
+      await this.sleep(1500)
+      const click = await this.worker.call<{ clicked: boolean; result: string }>('clickDialogButton', {
+        handle: dlg.handle,
+        name: GX_PLC_WRITE_CLOSE_BUTTON
+      })
+      if (!click.clicked) {
+        throw new Error(
+          `「${GX_PLC_WRITE_DIALOG_TITLE}」已达 100% 但点击「${GX_PLC_WRITE_CLOSE_BUTTON}」失败（${click.result}）`
+        )
+      }
+      closedBy = 'close-button'
+      const goneDeadline = Date.now() + 5000
+      while (await this.findPlcWriteDialog(win.handle)) {
+        if (Date.now() >= goneDeadline) {
+          throw new Error(`已点击「${GX_PLC_WRITE_CLOSE_BUTTON}」但「${GX_PLC_WRITE_DIALOG_TITLE}」对话框仍未关闭`)
+        }
+        await this.sleep(300)
+      }
+      break
+    }
+
+    return {
+      ok: true,
+      title: win.title,
+      killedProcesses: kill.killed ?? [],
+      strayDialogsClosed,
+      simClicks,
+      simMenuPath,
+      plcWriteClosedBy: closedBy,
+      lastProgress
+    }
+  }
+
+  /** Poll for the simulator runtime process (the start-click success gate). */
+  private async waitForSimProcess(waitMs: number): Promise<boolean> {
+    const deadline = Date.now() + waitMs
+    while (true) {
+      const res = await this.worker.call<{ running: Array<{ name: string; pid: number }> }>('findProcess', {
+        names: ['QuteSimRun']
+      })
+      if ((res.running ?? []).length > 0) return true
+      if (Date.now() >= deadline) return false
+      await this.sleep(500)
+    }
+  }
+
+  /**
+   * ESC away stray titled top-level #32770 dialogs of the works2 process
+   * (error popups left by the force-killed simulator). Best-effort: each
+   * dialog only receives ESC after it VERIFIABLY owns the foreground, and
+   * failures are skipped.
+   */
+  private async closeStrayDialogs(mainHandle: number): Promise<number> {
+    let closed = 0
+    try {
+      const res = await this.worker.call<{ dialogs: ElementInfo[] }>('findDialog', {
+        rootHandle: mainHandle,
+        className: '#32770',
+        search: 'top-level'
+      })
+      for (const d of res.dialogs ?? []) {
+        if (!d.handle) continue
+        try {
+          if (!(await this.setForegroundVerified(d.handle))) continue
+          await this.worker.call('sendKeys', { keys: '{ESC}' })
+          await this.sleep(300)
+          closed++
+        } catch {
+          /* best-effort */
+        }
+      }
+    } catch {
+      /* dialog scan unavailable — proceed without dismissing */
+    }
+    return closed
+  }
+
+  /** The auto PLC写入 dialog: a titled top-level #32770 (pid-filtered scan). */
+  private async findPlcWriteDialog(mainHandle: number): Promise<ElementInfo | null> {
+    try {
+      const res = await this.worker.call<{ dialogs: ElementInfo[] }>('findDialog', {
+        rootHandle: mainHandle,
+        className: '#32770',
+        search: 'top-level'
+      })
+      return (res.dialogs ?? []).find((d) => d.name === GX_PLC_WRITE_DIALOG_TITLE) ?? null
+    } catch {
+      return null
+    }
   }
 
   /** Per-generation error classifier (works2 classifies by the 结果 cell). */

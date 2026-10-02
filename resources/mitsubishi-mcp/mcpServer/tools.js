@@ -7,12 +7,15 @@ exports.callTool = callTool;
  *
  * Two tool families, one per transport:
  *
- * - UIA tools (gx_attach/write_st/read_st/build/get_output_errors) run through
- *   the 64-bit PowerShell UIA worker — thin wrappers over GxWindowOps.
- * - Simulation tools (gx_sim_*) run through a SECOND PsWorker spawned under
- *   32-bit PowerShell (SysWOW64) because MX Component's ActUtlType is a
- *   32-bit COM server. They verify program BEHAVIOR against GX Simulator2
- *   (write inputs -> read outputs), which compilation alone cannot prove.
+ * - UIA tools (gx_attach/write_st/read_st/build/get_output_errors/gx_sim_start)
+ *   run through the 64-bit PowerShell UIA worker — thin wrappers over
+ *   GxWindowOps. gx_sim_start is UI-only automation (menu click + dialog
+ *   shepherding), so it rides the UIA worker even though its name says sim.
+ * - Simulation tools (gx_sim_connect/read/write/disconnect) run through a
+ *   SECOND PsWorker spawned under 32-bit PowerShell (SysWOW64) because MX
+ *   Component's ActUtlType is a 32-bit COM server. They verify program
+ *   BEHAVIOR against GX Simulator2 (write inputs -> read outputs), which
+ *   compilation alone cannot prove.
  *
  * Every tool returns JSON text content and maps thrown errors to
  * `isError: true` results (never raw stack traces). One tool set serves both
@@ -92,8 +95,18 @@ exports.TOOLS = [
         }
     },
     {
+        name: 'gx_sim_start',
+        description: '启动 GX Simulator2 仿真并自动完成 PLC 写入（仅 target=works2）。流程：杀掉已有模拟器进程做干净重启 → ESC 关闭残留对话框 → MSAA 点击「模拟」菜单（杀进程后第一次点击走停止路径，未启动会自动点第二次）→ 盯梢自动弹出的「PLC写入」对话框，进度到 100/100% 后自动点「关闭」（未勾选「处理结束时自动关闭」时对话框会永久挂起，模拟器里将始终是空程序）。完成后即可 gx_sim_connect 做行为验证。前置条件：GX Works2 已打开工程且编译通过。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                target: TARGET_ARG
+            }
+        }
+    },
+    {
         name: 'gx_sim_connect',
-        description: '连接 GX Simulator2 仿真器（经 MX Component ActUtlType，逻辑站号默认 1）。返回 CPU 运行状态（cpuRun）与扫描时间。前置条件：MX Component 已安装且 Communication Setup Utility 已把逻辑站号指向 GX Simulator2；GX Works2 中已点「调试>模拟开始/停止」且 PLC 写入完成（写入对话框进度到 100% 后必须手动点关闭）。',
+        description: '连接 GX Simulator2 仿真器（经 MX Component ActUtlType，逻辑站号默认 1）。返回 CPU 运行状态（cpuRun）与扫描时间。前置条件：MX Component 已安装且 Communication Setup Utility 已把逻辑站号指向 GX Simulator2；GX Works2 中已启动模拟且 PLC 写入完成（建议直接用 gx_sim_start 自动完成启动+写入+关闭对话框）。',
         inputSchema: {
             type: 'object',
             properties: {
@@ -176,7 +189,11 @@ function parseStation(args) {
     }
     return args.station;
 }
-/** Tools served by the 32-bit MX Component worker instead of GxWindowOps. */
+/**
+ * Tools served by the 32-bit MX Component worker instead of GxWindowOps.
+ * gx_sim_start is deliberately NOT here: it is pure UI automation (menu click
+ * + dialog shepherding) and rides the 64-bit UIA worker.
+ */
 const SIM_TOOLS = new Set(['gx_sim_connect', 'gx_sim_read', 'gx_sim_write', 'gx_sim_disconnect']);
 function parseWriteItems(args) {
     const raw = args.items;
@@ -251,6 +268,9 @@ async function callTool(worker, name, args, simWorker) {
             }
             case 'gx_get_output_errors': {
                 return json({ errors: await ops.getOutputErrors() });
+            }
+            case 'gx_sim_start': {
+                return json(await ops.simStart());
             }
             default:
                 return errorResult(`unknown tool: ${name}`);
