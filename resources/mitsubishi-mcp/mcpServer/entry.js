@@ -26,7 +26,10 @@ const tools_1 = require("./tools");
 const SERVER_NAME = 'gx-works-bridge';
 const SERVER_VERSION = '0.1.0';
 const PROTOCOL_VERSION = '2024-11-05';
-const worker = new psWorker_1.PsWorker();
+// UIA worker: some ops (focusElement class search, msaaClickMenu toolbar
+// lookup) run FindAll(Descendants) over the huge GX Works frame tree and can
+// legitimately exceed the 20s default on works3 — give them headroom.
+const worker = new psWorker_1.PsWorker({ defaultTimeoutMs: 45_000 });
 // Simulation bridge: ActUtlType is a 32-bit COM server, so this worker MUST
 // run under the SysWOW64 PowerShell. Fails lazily (spawn ENOENT →
 // PsWorkerUnhealthyError) on systems without 32-bit PowerShell / MX Component.

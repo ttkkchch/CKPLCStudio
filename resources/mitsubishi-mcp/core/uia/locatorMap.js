@@ -37,11 +37,44 @@ const WORKS3_PROFILE = {
     msaa: {
         toolbarClassName: 'XTPToolBar',
         compileDialogClassName: '#32770',
+        // Calibrated live 2026-10-02: the 全部转换 confirm (title 全部转换, buttons
+        // 确定/取消/选项设置/维持/重新分配 + a 执行程序检查 checkbox) is an OWNED
+        // TOP-LEVEL #32770, not a frame child — ENTER lands on the 确定 default.
+        compileDialogScope: 'top-level',
         statusBarClassName: 'XTPStatusBar',
         dockContainerClassName: 'XTPDockingPaneTabbedContainer',
         outputListClassName: 'SysListView32',
+        // Calibrated live 2026-10-02: visible rows are app-painted; only the
+        // x86-layout LVM route returns cell text (see outputListReader doc).
+        outputListReader: 'lvm',
+        // The menu bar XTPToolBar's window text == UIA Name == 菜单栏 (hwnd
+        // 0x21376 live); windowOps msaaClickMenu matches it through Win32
+        // EnumChildWindows — UIA FindAll(Descendants) over this frame stalls >45s.
+        menuBarName: '菜单栏',
+        // Confirm via BM_CLICK 确定 — the foreground+ENTER path was refused by
+        // the Windows foreground lock live (2026-10-02).
+        confirmButtonName: '确定',
         minMenuPathSegments: 4
     },
+    /**
+     * Calibrated live 2026-10-02: converted-program error rows join as
+     * "No | 结果 | 对象名 | 分类 | 内容 | 错误代码", e.g.
+     * "1 | Error | ProgPou | 转换程序 | 语法有误。请确认错误前后的语法。 | 0x110E1A02".
+     * Same 结果-cell rule as works2: match the exact Error cell so free text
+     * containing 错误/エラー (e.g. the 错误代码 header) never classifies.
+     */
+    outputErrorPattern: /\|\s*Error\s*\|/,
+    /**
+     * Calibrated live 2026-10-02: the works3 ST editor is a .NET (WinForms)
+     * custom control — there is NO classic text hwnd and the UIA tree is a
+     * nested Pane stack. The editor host carries the generic WinForms class
+     * "WindowsForms10.Window.8.app.<runtime-suffix>" (suffix observed
+     * 0.1f550a4_r31_ad1); we match the version-stable PREFIX. The class-search
+     * fallback cannot work for works3 (no stable exact name), so the fast path
+     * — the app's CURRENT focused element while the editor is the active view —
+     * is the only reliable route (focusEditor matches it by prefix).
+     */
+    editorFocusClassName: 'WindowsForms10.Window.8.app.',
     stRequiresStructuredProject: false
 };
 /**

@@ -71,13 +71,18 @@ describe('parseDevice 软元件代码表', () => {
       ['F10', 0x93],
       ['SB0', 0xa1],
       ['V0', 0x94],
-      ['S10', 0x98] // 步进继电器，代码未证实（多源一致）
+      ['S10', 0x98] // 步进继电器，代码未证实（多源一致；Simulator3 实测 0x4031 拒绝）
     ]
     for (const [addr, code] of expected) {
       const spec = parseDevice(addr)
       expect(spec.code).toBe(code)
       expect(spec.unit).toBe('bit')
     }
+  })
+
+  it('特殊继电器/寄存器：SM=0x91（位）、SD=0xA9（字）——2026-10-02 Simulator3 实测证实', () => {
+    expect(parseDevice('SM0')).toEqual({ code: 0x91, name: 'SM', number: 0, unit: 'bit' })
+    expect(parseDevice('SD100')).toEqual({ code: 0xa9, name: 'SD', number: 100, unit: 'word' })
   })
 
   it('定时器四件套：T/TS=0xC1（位）、TC=0xC0（位）、TN=0xC2（字）', () => {

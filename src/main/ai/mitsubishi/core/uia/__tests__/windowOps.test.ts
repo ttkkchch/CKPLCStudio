@@ -118,8 +118,12 @@ class FakeWorker implements PsWorkerLike {
       case 'clickDialogButton': {
         if (!this.clickDialogButtonOk) return { clicked: false, result: 'NOT-FOUND(42)' } as T
         this.onDialogButtonClick?.()
+        // The confirm dialog closes on its default button, mirroring ENTER.
+        if (!this.dialogSticks) this.dialogFound = false
         return { clicked: true, result: 'CLICKED D>c2 [关闭]' } as T
       }
+      case 'closeTopDialogs':
+        return { closed: 0, titles: [] } as T
       case 'findElements': {
         const cls = (params.classNames as string[] | undefined)?.[0] ?? ''
         if (cls === 'XTPStatusBar') {
@@ -210,8 +214,18 @@ describe('locatorMap', () => {
     expect(w2.outputErrorPattern?.test('1 | Error | POU_01 | 编译程序 | 没有找到算式。 | C8042')).toBe(true)
     expect(w2.outputErrorPattern?.test('No. | 结果 | 数据名 | 分类 | 内容 | 错误代码')).toBe(false)
     expect(w2.outputErrorPattern?.test('1 | CheckWarning | POU_01 | 双线圈 | C9300')).toBe(false)
-    expect(w3.msaa.outputListReader).toBeUndefined()
-    expect(w3.outputErrorPattern).toBeUndefined()
+    // Calibrated works3 (GXW3 1.128J zh-CN, 2026-10-02): LVM reader (UIA/MSAA
+    // names come back empty — rows are app-painted), 结果-cell error rule,
+    // top-level 全部转换 confirm via the 确定 button, menu bar matched by
+    // Win32 window text.
+    expect(w3.msaa.outputListReader).toBe('lvm')
+    expect(w3.msaa.compileDialogScope).toBe('top-level')
+    expect(w3.msaa.menuBarName).toBe('菜单栏')
+    expect(w3.msaa.confirmButtonName).toBe('确定')
+    expect(
+      w3.outputErrorPattern?.test('1 | Error | ProgPou | 转换程序 | 语法有误。请确认错误前后的语法。 | 0x110E1A02')
+    ).toBe(true)
+    expect(w3.outputErrorPattern?.test('1 | CheckWarning | ProgPou | 二重线圈 | C9300')).toBe(false)
     for (const profile of Object.values(GX_PROFILES)) {
       expect(profile.msaa.toolbarClassName.length).toBeGreaterThan(0)
       expect(profile.msaa.minMenuPathSegments).toBeGreaterThan(0)
@@ -304,13 +318,13 @@ describe('GxWindowOps.readSt', () => {
 })
 
 describe('GxWindowOps.build', () => {
-  it('clicks 全部转换 via MSAA, confirms the dialog with ENTER and settles', async () => {
+  it('clicks 全部转换 via MSAA, confirms via the 确定 button and settles', async () => {
     const fake = new FakeWorker()
     let n = 0
     fake.readRows = () => {
       n++
       if (n === 1) return ['old output']
-      return ['build started', 'error E1 somewhere']
+      return ['build started', '3 | Error | ProgPou | 转换程序 | 语法有误。 | 0x110E1A02']
     }
     let m = 0
     fake.statusText = () => {
@@ -320,14 +334,18 @@ describe('GxWindowOps.build', () => {
     const result = await makeOps(fake).build('all')
     expect(result.settled).toBe(true)
     expect(result.changed).toBe(true)
-    expect(result.errors).toEqual(['error E1 somewhere'])
+    expect(result.errors).toEqual(['3 | Error | ProgPou | 转换程序 | 语法有误。 | 0x110E1A02'])
     expect(result.menuPath).toContain('全部转换')
     expect(result.statusBarText).toContain('转换结果')
     expect(result.dockTabNames).toEqual(['输出'])
+    expect(result.strayDialogsClosed).toBe(0)
     expect(fake.calls.filter((c) => c.op === 'msaaClickMenu').length).toBe(1)
-    expect(fake.calls.filter((c) => c.op === 'findDialog').length).toBe(1)
-    const enter = fake.calls.find((c) => c.op === 'sendKeys' && c.params.keys === '{ENTER}')
-    expect(enter).toBeDefined()
+    // initial confirm-dialog find + one close-check poll
+    expect(fake.calls.filter((c) => c.op === 'findDialog').length).toBe(2)
+    // works3 confirms by clicking 确定 — no keyboard synthesis anywhere
+    const confirm = fake.calls.find((c) => c.op === 'clickDialogButton')
+    expect(confirm?.params.name).toBe('确定')
+    expect(fake.calls.some((c) => c.op === 'sendKeys')).toBe(false)
   })
 
   it('reports outputUnavailable when the Output pane never appears', async () => {
@@ -361,10 +379,14 @@ describe('GxWindowOps.build', () => {
     expect(fake.calls.some((c) => c.op === 'sendKeys')).toBe(false)
   })
 
-  it('refuses to send ENTER when the dialog cannot take the foreground', async () => {
+  it('refuses to send ENTER when the dialog cannot take the foreground (works2)', async () => {
     const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works2', handle: 7 }]
     fake.foregroundOk = false
-    await expect(makeOps(fake).build('all')).rejects.toThrow('无法将「全部转换」对话框置前')
+    // works3 confirms by button click and never needs the foreground; the
+    // ENTER path remains works2-only (calibrated), still guarded by the
+    // foreground check.
+    await expect(makeOps(fake, { target: 'works2' }).build('all')).rejects.toThrow('无法将「转换(+全部编译)」对话框置前')
     expect(fake.calls.some((c) => c.op === 'sendKeys')).toBe(false)
   })
 
@@ -375,11 +397,17 @@ describe('GxWindowOps.build', () => {
 })
 
 describe('GxWindowOps.getOutputErrors', () => {
-  it('filters error-ish lines', async () => {
+  it('filters error rows by the calibrated works3 结果-cell rule', async () => {
     const fake = new FakeWorker()
-    fake.readRows = () => ['info ok', 'Error C1205', '警告 W1', '错误 E3']
+    fake.readRows = () => [
+      '1 | Information | ProgPou | 转换程序 | 转换结束。 | 0x00000000',
+      '1 | Error | ProgPou | 转换程序 | 语法有误。请确认错误前后的语法。 | 0x110E1A02',
+      '2 | CheckWarning | ProgPou | 二重线圈 | C9300'
+    ]
     const errors = await makeOps(fake).getOutputErrors()
-    expect(errors).toEqual(['Error C1205', '错误 E3'])
+    expect(errors).toEqual([
+      '1 | Error | ProgPou | 转换程序 | 语法有误。请确认错误前后的语法。 | 0x110E1A02'
+    ])
   })
 })
 

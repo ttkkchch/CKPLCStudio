@@ -31,7 +31,10 @@ interface RpcRequest {
   params?: Record<string, unknown>
 }
 
-const worker = new PsWorker()
+// UIA worker: some ops (focusElement class search, msaaClickMenu toolbar
+// lookup) run FindAll(Descendants) over the huge GX Works frame tree and can
+// legitimately exceed the 20s default on works3 — give them headroom.
+const worker = new PsWorker({ defaultTimeoutMs: 45_000 })
 
 // Simulation bridge: ActUtlType is a 32-bit COM server, so this worker MUST
 // run under the SysWOW64 PowerShell. Fails lazily (spawn ENOENT →

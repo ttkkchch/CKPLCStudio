@@ -7,11 +7,14 @@
  * 及 SLMP 手册 SH-080956）的软元件代码表核对：
  * - X/Y/D/W/B/SW/SB/Z/ZR/SM/SD 等常见代码与官方手册表逐字核对一致
  *   （MELSEC iQ-F User Manual 通信篇 38.2 Device Access 表：9CH/9DH/A0H/B4H/B5H/
- *   CCH/B0H/A1H/91H/A9H 等）。
- * - T/C/ST 的触点/线圈/当前值代码未能在官方手册原文逐字核对（手册表页无法直接
- *   抓取），以下取值与 pymcprotocol、HslCommunication、多篇抓包交叉核对文章
- *   三方一致（规律：线圈代码 = 触点代码 - 1，三组定时器/计数器/累计定时器一致），
- *   标注为"未证实（多源一致）"。
+ *   CCH/B0H/91H/A9H 等）。
+ * - 2026-10-02 GX Simulator3（R08CPU，127.0.0.1:5511，SLMP 3E 帧）真机联调证实：
+ *   T/TS/TC/TN（C1/C1/C0/C2）与 C/CS/CC/CN（C4/C4/C3/C5）六码读写正常；SM（91H）
+ *   位读正常（SM0=常 ON 语义吻合）；SD（A9H）批量读正常；X/Y/D 八进制/十进制语义
+ *   正常。
+ * - 2026-10-02 Simulator3 实测受限项：STS/STC/STN（C7/C6/C8）与 S（98H）返回
+ *   0x4031（软元件指定异常）——属 R08CPU 仿真器软元件范围限制，不代表实体 CPU；
+ *   代码本身仍与 pymcprotocol、HslCommunication 多源一致，保留并标注。
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseDevice = parseDevice;
@@ -39,22 +42,26 @@ const DEVICE_TABLE = {
     F: { code: 0x93, radix: RADIX_DECIMAL, unit: 'bit' }, // 报警器
     SB: { code: 0xa1, radix: RADIX_HEXADECIMAL, unit: 'bit' }, // 链接特殊继电器（手册 38.2 表 A1H）
     V: { code: 0x94, radix: RADIX_DECIMAL, unit: 'bit' }, // 边沿继电器
-    S: { code: 0x98, radix: RADIX_DECIMAL, unit: 'bit' }, // 步进继电器（未证实：官方表原文未逐字核对，多源一致）
+    S: { code: 0x98, radix: RADIX_DECIMAL, unit: 'bit' }, // 步进继电器（未证实：官方表原文未逐字核对，多源一致；2026-10-02 Simulator3 实测 0x4031 拒绝——仿真器软元件范围限制）
+    // ---- 特殊继电器/寄存器 ----
+    SM: { code: 0x91, radix: RADIX_DECIMAL, unit: 'bit' }, // 特殊输入继电器（手册 38.2 表 91H；2026-10-02 Simulator3 实测位读正常，SM0=常 ON）
+    SD: { code: 0xa9, radix: RADIX_DECIMAL, unit: 'word' }, // 特殊输入寄存器（手册 38.2 表 A9H；2026-10-02 Simulator3 实测批量读正常）
     // ---- 定时器四件套：触点/线圈 = 位单元，当前值 = 字单元 ----
-    // 未证实（多源一致）：TS/TC/TN 与 pymcprotocol、HslCommunication 及抓包文章一致
+    // 2026-10-02 Simulator3（R08CPU）真机证实：四码批量读/写正常
     T: { code: 0xc1, radix: RADIX_DECIMAL, unit: 'bit' }, // T 触点 = TS
     TS: { code: 0xc1, radix: RADIX_DECIMAL, unit: 'bit' }, // 定时器触点
     TC: { code: 0xc0, radix: RADIX_DECIMAL, unit: 'bit' }, // 定时器线圈
     TN: { code: 0xc2, radix: RADIX_DECIMAL, unit: 'word' }, // 定时器当前值
     // ---- 计数器四件套 ----
-    // 未证实（多源一致）：CS/CC/CN 与 pymcprotocol、HslCommunication 及抓包文章一致
+    // 2026-10-02 Simulator3（R08CPU）真机证实：四码批量读/写正常
     C: { code: 0xc4, radix: RADIX_DECIMAL, unit: 'bit' }, // C 触点 = CS
     CS: { code: 0xc4, radix: RADIX_DECIMAL, unit: 'bit' }, // 计数器触点
     CC: { code: 0xc3, radix: RADIX_DECIMAL, unit: 'bit' }, // 计数器线圈
     CN: { code: 0xc5, radix: RADIX_DECIMAL, unit: 'word' }, // 计数器当前值
     // ---- 累计定时器（iQ-R 命名 ST/STS/STC/STN；Q/L 系列命名 SS/SC/SN，同码）----
     // 未证实（pymcprotocol 将 iQ-R 的 STS/STC/STN 与 Q 系列的 SS/SC/SN 映射到
-    // 同一组代码 C7/C6/C8，多源一致）
+    // 同一组代码 C7/C6/C8，多源一致）；2026-10-02 Simulator3 实测 0x4031 拒绝
+    // （仿真器软元件范围限制，实体 CPU 待验）
     ST: { code: 0xc7, radix: RADIX_DECIMAL, unit: 'bit' }, // ST 触点 = STS
     STS: { code: 0xc7, radix: RADIX_DECIMAL, unit: 'bit' }, // 累计定时器触点
     STC: { code: 0xc6, radix: RADIX_DECIMAL, unit: 'bit' }, // 累计定时器线圈

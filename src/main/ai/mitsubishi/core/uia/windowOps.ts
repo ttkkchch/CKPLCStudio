@@ -73,6 +73,8 @@ export interface BuildResult {
   statusBarText?: string
   /** bottom dock container UIA Names (each = its current active tab) */
   dockTabNames?: string[]
+  /** stray confirm dialogs (left by earlier failed runs) closed before this build */
+  strayDialogsClosed?: number
 }
 
 export interface SimStartResult {
@@ -221,7 +223,10 @@ export class GxWindowOps {
     if (editorCls) {
       try {
         const cur = await this.worker.call<{ info?: ElementInfo }>('getFocusedElement')
-        if (cur.info?.className === editorCls) return cur.info
+        // Prefix match: works3's editor host class carries a .NET runtime
+        // suffix ("WindowsForms10.Window.8.app.<suffix>") that can drift with
+        // the installed runtime — the version-stable prefix is the contract.
+        if (cur.info?.className?.startsWith(editorCls)) return cur.info
       } catch {
         /* focused-element probe unavailable — fall through to searching */
       }
@@ -366,6 +371,21 @@ export class GxWindowOps {
       throw new Error(`暂不支持 scope=${scope}（当前仅支持 'all' 全程序编译）`)
     }
     const win = await this.attach()
+    // MSAA menu clicks bypass modality: a stray confirm dialog left by a
+    // previous failed run lets a NEW 全部转换 dialog stack on top, and the
+    // confirm/close checks then see the leftover forever (live 2026-10-02,
+    // two 全部转换 dialogs stacked). Close every visible titled top-level
+    // confirm-class dialog up front — WM_CLOSE = 取消 semantics.
+    let strayDialogsClosed = 0
+    try {
+      const stray = await this.worker.call<{ closed: number }>('closeTopDialogs', {
+        rootHandle: win.handle,
+        className: this.profile.msaa.compileDialogClassName ?? '#32770'
+      })
+      strayDialogsClosed = stray.closed ?? 0
+    } catch {
+      /* best-effort cleanup — the close-check below still guards the flow */
+    }
     const baseline =
       (await this.readBuildSnapshot(win.handle)) ?? { rows: [], statusBarText: undefined, dockTabNames: undefined }
     const baselineRows = baseline.rows
@@ -394,13 +414,33 @@ export class GxWindowOps {
           `请确认 ${this.profile.displayName} 版本受支持`
       )
     }
-    // Refuse to send ENTER unless the dialog really owns the foreground —
-    // otherwise the keystroke could land in an arbitrary window.
-    const fgOk = await this.setForegroundVerified(dialog.handle)
-    if (!fgOk) {
-      throw new Error(`无法将「${itemName}」对话框置前——已放弃发送 ENTER（避免按键落入错误窗口），请重试`)
+    // Confirm the dialog. Two strategies: click the named default button via
+    // the MSAA clickDialogButton op (works3 — the Windows foreground lock
+    // refused the foreground+ENTER path when the worker did not own the
+    // foreground, live 2026-10-02), or foreground-verified ENTER (works2
+    // live-calibrated).
+    const confirmButton = this.profile.msaa.confirmButtonName
+    if (confirmButton) {
+      // Existing MSAA push-button click op (also drives the works2 PLC写入
+      // close button): accDoDefaultAction on the button named confirmButton.
+      const btnRes = await this.worker.call<{ clicked: boolean; result?: string }>('clickDialogButton', {
+        handle: dialog.handle,
+        name: confirmButton
+      })
+      if (!btnRes.clicked) {
+        throw new Error(
+          `「${itemName}」对话框上未点到「${confirmButton}」按钮（${btnRes.result ?? 'no-result'}）——请确认版本受支持`
+        )
+      }
+    } else {
+      // Refuse to send ENTER unless the dialog really owns the foreground —
+      // otherwise the keystroke could land in an arbitrary window.
+      const fgOk = await this.setForegroundVerified(dialog.handle)
+      if (!fgOk) {
+        throw new Error(`无法将「${itemName}」对话框置前——已放弃发送 ENTER（避免按键落入错误窗口），请重试`)
+      }
+      await this.worker.call('sendKeys', { keys: GX_BUILD_CONFIRM_KEYS })
     }
-    await this.worker.call('sendKeys', { keys: GX_BUILD_CONFIRM_KEYS })
 
     if (this.profile.msaa.compileDialogScope === 'top-level') {
       // Works2 (live-calibrated): ENTER must CLOSE the confirm dialog and run
@@ -444,7 +484,8 @@ export class GxWindowOps {
             settled: false,
             changed: false,
             outputUnavailable: true,
-            menuPath: click.path
+            menuPath: click.path,
+            strayDialogsClosed
           }
         }
         continue
@@ -472,7 +513,8 @@ export class GxWindowOps {
       changed: prevRows !== baselineRows.join('\n') || prevStatus !== baselineStatus,
       statusBarText: lastStatus || undefined,
       dockTabNames: lastTabs,
-      menuPath: click.path
+      menuPath: click.path,
+      strayDialogsClosed
     }
   }
 
@@ -805,10 +847,11 @@ export class GxWindowOps {
    * Read Output rows; null when nothing confidently readable exists (pane
    * closed or ambiguous candidates) so callers can distinguish "no output"
    * from "cannot read". Calibrated channels: works3 reads the SysListView32
-   * report list through UIA (empty rows on a clean build); works2 reads the
-   * VSFlexGrid8N ActiveX grid through MSAA (rows always include the header,
-   * classified by the 结果 cell). The generic readGrid path remains as the
-   * last-resort fallback.
+   * report list through cross-process x86-layout LVM (rows are app-painted —
+   * UIA/MSAA names are empty, and a UIA FindAll over the frame stalls >45s);
+   * works2 reads the VSFlexGrid8N ActiveX grid through MSAA (rows always
+   * include the header, classified by the 结果 cell). The generic readGrid
+   * path remains as the last-resort fallback.
    */
   private async tryReadOutputLines(handle: number): Promise<string[] | null> {
     const listCls = this.profile.msaa.outputListClassName

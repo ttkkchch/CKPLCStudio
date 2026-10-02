@@ -40,6 +40,9 @@ public static class GxNative {
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder sb, int maxCount);
     public static string ClassNameOf(IntPtr hWnd) { var sb = new StringBuilder(256); return GetClassName(hWnd, sb, 256) > 0 ? sb.ToString() : ""; }
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
@@ -47,6 +50,25 @@ public static class GxNative {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder sb, int maxCount);
     [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lp);
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lp);
+    [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr hWnd, EnumWindowsProc cb, IntPtr lp);
+
+    // Direct Win32 child scan by class — the FAST route for native controls
+    // (XTPToolBar etc.). UIA FindAll(Descendants) over a GX Works frame costs
+    // >45s cold (whole-tree cross-process walk); EnumChildWindows is O(children)
+    // and returns identical hwnds. Window text == UIA Name for XTP toolbars
+    // (verified live 2026-10-02 on works3 菜单栏 and works2 菜单栏).
+    public static List<KeyValuePair<long, string>> ChildWindowsOf(IntPtr root, string className) {
+        var found = new List<KeyValuePair<long, string>>();
+        EnumChildWindows(root, delegate(IntPtr h, IntPtr lp) {
+            var cn = new StringBuilder(256);
+            if (GetClassName(h, cn, 256) <= 0 || cn.ToString() != className) return true;
+            var tt = new StringBuilder(512);
+            GetWindowText(h, tt, 512);
+            found.Add(new KeyValuePair<long, string>(h.ToInt64(), tt.ToString()));
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
 
     // Owned dialogs of GX Works2's build confirm are TOP-LEVEL windows (not
     // main-window children), invisible to a UIA Descendants search from the
@@ -66,6 +88,93 @@ public static class GxNative {
             return true;
         }, IntPtr.Zero);
         return found;
+    }
+
+    [DllImport("user32.dll")] public static extern IntPtr SendMessageW(IntPtr h, uint msg, IntPtr wp, IntPtr lp);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+    [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll")] public static extern IntPtr VirtualAllocEx(IntPtr proc, IntPtr addr, IntPtr size, uint type, uint protect);
+    [DllImport("kernel32.dll")] public static extern bool VirtualFreeEx(IntPtr proc, IntPtr addr, IntPtr size, uint freeType);
+    [DllImport("kernel32.dll")] public static extern bool WriteProcessMemory(IntPtr proc, IntPtr addr, byte[] buf, IntPtr size, out IntPtr written);
+    [DllImport("kernel32.dll")] public static extern bool ReadProcessMemory(IntPtr proc, IntPtr addr, byte[] buf, IntPtr size, out IntPtr read);
+    [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
+
+    public class LvListResult {
+        public long hwnd;
+        public bool hasHeader;
+        public List<string> Rows = new List<string>();
+    }
+
+    // Cross-process SysListView32 reader for the works3 output list. The list's
+    // visible rows are painted from app storage: UIA names, MSAA names and even
+    // LVM with an x64 LVITEMW all come back EMPTY because GXW3.exe is a 32-bit
+    // WOW64 process — only the x86 LVITEMW layout (60 bytes, 32-bit pszText)
+    // returns real cells. Rows join "cell | cell" mirroring the works2
+    // msaa-grid rows. Calibrated live 2026-10-02 (works3 1.128J zh-CN):
+    // "1 | Error | ProgPou | 转换程序 | 语法有误。请确认错误前后的语法。 | 0x110E1A02".
+    public static List<LvListResult> LvListsOf(IntPtr root, string className, int maxRows) {
+        var lists = new List<LvListResult>();
+        EnumChildWindows(root, delegate(IntPtr h, IntPtr lp) {
+            var cn = new StringBuilder(256);
+            if (GetClassName(h, cn, 256) <= 0 || cn.ToString() != className) return true;
+            if (!IsWindowVisible(h)) return true;
+            RECT r; GetWindowRect(h, out r);
+            if ((r.R - r.L) <= 50 || (r.B - r.T) <= 30) return true;
+            var res = new LvListResult();
+            res.hwnd = h.ToInt64();
+            IntPtr hdr = SendMessageW(h, 0x1000 + 31, IntPtr.Zero, IntPtr.Zero); // LVM_GETHEADER
+            res.hasHeader = hdr != IntPtr.Zero;
+            int rows = (int)SendMessageW(h, 0x1000 + 4, IntPtr.Zero, IntPtr.Zero).ToInt64(); // LVM_GETITEMCOUNT
+            int cols = 1;
+            if (hdr != IntPtr.Zero) cols = (int)SendMessageW(hdr, 0x1200, IntPtr.Zero, IntPtr.Zero).ToInt64(); // HDM_GETITEMCOUNT
+            if (cols <= 0) cols = 1;
+            if (rows > maxRows) rows = maxRows;
+            uint pid = 0;
+            GetWindowThreadProcessId(h, out pid);
+            IntPtr proc = OpenProcess(0x1F0FFF, false, pid);
+            if (proc == IntPtr.Zero) { lists.Add(res); return true; }
+            try {
+                int structSize = 60; // x86 LVITEMW
+                IntPtr remote = VirtualAllocEx(proc, IntPtr.Zero, (IntPtr)(structSize + 4096), 0x3000, 0x04);
+                if (remote != IntPtr.Zero) {
+                    try {
+                        for (int row = 0; row < rows; row++) {
+                            var parts = new List<string>();
+                            for (int col = 0; col < cols; col++) {
+                                var local = new byte[structSize];
+                                byte[] num = BitConverter.GetBytes(1); // LVIF_TEXT
+                                Array.Copy(num, 0, local, 0, 4);
+                                num = BitConverter.GetBytes(row);
+                                Array.Copy(num, 0, local, 4, 4);
+                                num = BitConverter.GetBytes((uint)col);
+                                Array.Copy(num, 0, local, 8, 4);
+                                num = BitConverter.GetBytes((uint)(remote.ToInt64() + structSize));
+                                Array.Copy(num, 0, local, 20, 4);
+                                num = BitConverter.GetBytes(1000);
+                                Array.Copy(num, 0, local, 24, 4);
+                                IntPtr wr;
+                                string cell = "";
+                                if (WriteProcessMemory(proc, remote, local, (IntPtr)structSize, out wr)) {
+                                    SendMessageW(h, 0x1000 + 115, (IntPtr)row, remote); // LVM_GETITEMTEXTW
+                                    var textBuf = new byte[4096];
+                                    if (ReadProcessMemory(proc, (IntPtr)(remote.ToInt64() + structSize), textBuf, (IntPtr)4096, out wr)) {
+                                        cell = Encoding.Unicode.GetString(textBuf);
+                                        int z = cell.IndexOf('\\0');
+                                        if (z >= 0) cell = cell.Substring(0, z);
+                                    }
+                                }
+                                parts.Add(cell);
+                            }
+                            res.Rows.Add(string.Join(" | ", parts));
+                        }
+                    } finally { VirtualFreeEx(proc, remote, IntPtr.Zero, 0x8000); }
+                }
+            } finally { CloseHandle(proc); }
+            lists.Add(res);
+            return true;
+        }, IntPtr.Zero);
+        return lists;
     }
 }
 '@
@@ -433,6 +542,28 @@ function Invoke-Op([string]$op, $params) {
             if (-not [GxNative]::IsWindow($h)) { throw ('window handle is no longer valid: ' + $params.handle) }
             if ([GxNative]::IsIconic($h)) { [void][GxNative]::ShowWindow($h, 9) }
             $ok = [GxNative]::SetForegroundWindow($h)
+            if (-not $ok -or [GxNative]::GetForegroundWindow() -ne $h) {
+                # Windows foreground lock: a background process may not steal
+                # focus (observed live 2026-10-02 when the user browses in a
+                # browser while the bridge runs). Classic bypass — attach our
+                # input queue to the foreground thread so the OS treats this
+                # thread as the active input context, then steal foreground.
+                Start-Sleep -Milliseconds 80
+                $fgNow = [GxNative]::GetForegroundWindow()
+                $scratch = [uint32]0
+                $fgThread = [GxNative]::GetWindowThreadProcessId($fgNow, [ref]$scratch)
+                $myThread = [GxNative]::GetCurrentThreadId()
+                $attached = $false
+                if ($fgThread -ne 0 -and $fgThread -ne $myThread) {
+                    $attached = [GxNative]::AttachThreadInput($myThread, $fgThread, $true)
+                }
+                try {
+                    [void][GxNative]::BringWindowToTop($h)
+                    $ok = [GxNative]::SetForegroundWindow($h)
+                } finally {
+                    if ($attached) { [void][GxNative]::AttachThreadInput($myThread, $fgThread, $false) }
+                }
+            }
             Start-Sleep -Milliseconds 120
             return @{ foregrounded = [bool]$ok; nowForeground = ([GxNative]::GetForegroundWindow() -eq $h) }
         }
@@ -515,10 +646,40 @@ function Invoke-Op([string]$op, $params) {
             # buttons (模拟开始 etc.) that a class-only filter would click.
             $mbName = $null
             if ($params.menuBarName) { $mbName = [string]$params.menuBarName }
+            $h = [IntPtr][int64]$params.rootHandle
+            # FAST route (default): EnumChildWindows class scan — O(children),
+            # no UIA tree walk. Window text == UIA Name for XTP toolbars
+            # (verified live works3+works2 2026-10-02). The UIA FindAll below
+            # is kept only as a defensive fallback for shells whose menu bar
+            # is NOT a frame descendant in Win32 terms.
+            $barsFast = [GxNative]::ChildWindowsOf($h, $tbCls)
+            $i = 0
+            foreach ($b in $barsFast) {
+                $i++
+                if ($mbName -and ($b.Value -ne $mbName)) { continue }
+                $bh = [IntPtr]$b.Key
+                if ($bh -eq [IntPtr]::Zero) { continue }
+                $p = [GxMsaa]::FindPath($bh, [string]$params.itemName, $minSeg)
+                if ($p.StartsWith('FOUND')) {
+                    $c = [GxMsaa]::ClickItem($bh, [string]$params.itemName, $minSeg)
+                    return @{ clicked = $c.StartsWith('CLICKED'); result = $c; path = $c; barIndex = $i; strategy = 'toolbar' }
+                }
+            }
+            if ($barsFast.Count -gt 0 -or $mbName) {
+                if ($mbName) {
+                    # No root fallback when the caller pinned the menu bar — a BFS
+                    # from the window root would hit the very toolbar buttons the
+                    # filter exists to avoid.
+                    $miss = 'NOT-FOUND(menu-bar "' + $mbName + '")'
+                    return @{ clicked = $false; result = $miss; path = $miss; barIndex = 0; strategy = 'toolbar' }
+                }
+                # class scan found toolbars but none carried the item — no point
+                # re-scanning via UIA; go straight to the root fallback below.
+                $c3 = [GxMsaa]::ClickItem($h, [string]$params.itemName, $minSeg)
+                return @{ clicked = $c3.StartsWith('CLICKED'); result = $c3; path = $c3; barIndex = 0; strategy = 'root' }
+            }
+            # SLOW fallback: UIA descendants scan for the toolbar class.
             $root = Get-RootElementFor $params.rootHandle
-            # Codejock draws its own menus, so the MSAA menu bar is one of the
-            # XTP* toolbars; same-caption toolbar BUTTONS sit too shallow and
-            # are skipped by the minSegments filter.
             $clsCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, $tbCls)
             $bars = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $clsCond)
             $i = 0
@@ -530,18 +691,14 @@ function Invoke-Op([string]$op, $params) {
                 $p = [GxMsaa]::FindPath($bh, [string]$params.itemName, $minSeg)
                 if ($p.StartsWith('FOUND')) {
                     $c = [GxMsaa]::ClickItem($bh, [string]$params.itemName, $minSeg)
-                    return @{ clicked = $c.StartsWith('CLICKED'); result = $c; path = $c; barIndex = $i; strategy = 'toolbar' }
+                    return @{ clicked = $c.StartsWith('CLICKED'); result = $c; path = $c; barIndex = $i; strategy = 'toolbar-uia' }
                 }
             }
             if ($mbName) {
-                # No root fallback when the caller pinned the menu bar — a BFS
-                # from the window root would hit the very toolbar buttons the
-                # filter exists to avoid.
                 $miss = 'NOT-FOUND(menu-bar "' + $mbName + '")'
-                return @{ clicked = $false; result = $miss; path = $miss; barIndex = 0; strategy = 'toolbar' }
+                return @{ clicked = $false; result = $miss; path = $miss; barIndex = 0; strategy = 'toolbar-uia' }
             }
             # Fallback: BFS from the window root itself (menu bar is not an XTP* toolbar).
-            $h = [IntPtr][int64]$params.rootHandle
             $c2 = [GxMsaa]::ClickItem($h, [string]$params.itemName, $minSeg)
             return @{ clicked = $c2.StartsWith('CLICKED'); result = $c2; path = $c2; barIndex = 0; strategy = 'root' }
         }
@@ -612,14 +769,43 @@ function Invoke-Op([string]$op, $params) {
             }
             return @{ dialogs = @($out); total = $total }
         }
+        'closeTopDialogs' {
+            if (-not $params.rootHandle) { throw 'closeTopDialogs requires params.rootHandle' }
+            $cls = '#32770'
+            if ($params.className) { $cls = [string]$params.className }
+            $rootH = [IntPtr][int64]$params.rootHandle
+            [uint32]$pidWin = 0
+            [void][GxNative]::GetWindowThreadProcessId($rootH, [ref]$pidWin)
+            $strays = [GxNative]::TopDialogsOf($rootH, $pidWin, $cls)
+            $titles = @()
+            foreach ($s in @($strays)) {
+                $h = [IntPtr][int64]$s.Key
+                # WM_CLOSE = 取消 semantics on the compile-confirm dialogs.
+                [void][GxNative]::SendMessageW($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+                $titles += [string]$s.Value
+            }
+            return @{ closed = [int]$titles.Count; titles = @($titles) }
+        }
         'readOutputList' {
-            $root = Get-RootElementFor $params.rootHandle
             $cls = 'SysListView32'
             if ($params.className) { $cls = [string]$params.className }
             $reader = 'uia-list'
             if ($params.reader) { $reader = [string]$params.reader }
             $maxRows = 400
             if ($params.maxRows) { $maxRows = [int]$params.maxRows }
+            if ($reader -eq 'lvm') {
+                # Works3 output list: a UIA FindAll over the frame tree stalls
+                # >45s and the list's UIA/MSAA names are empty anyway (rows are
+                # app-painted). Win32 locate + cross-process x86-layout LVM is
+                # O(children) milliseconds (calibrated live 2026-10-02).
+                $lists = [GxNative]::LvListsOf([IntPtr][int64]$params.rootHandle, $cls, $maxRows)
+                $out = @()
+                foreach ($l in $lists) {
+                    $out += @{ rowCount = [int]$l.Rows.Count; rows = @($l.Rows); hasHeader = [bool]$l.hasHeader }
+                }
+                return @{ lists = @($out) }
+            }
+            $root = Get-RootElementFor $params.rootHandle
             $clsCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, $cls)
             $found = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $clsCond)
             $out = @()
