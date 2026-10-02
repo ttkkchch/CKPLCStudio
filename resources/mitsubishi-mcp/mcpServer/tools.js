@@ -3,13 +3,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TOOLS = void 0;
 exports.callTool = callTool;
 /**
- * Phase A tool surface of the GX Works stdio MCP bridge.
+ * Tool surface of the GX Works stdio MCP bridge.
  *
- * Thin wrappers over GxWindowOps — every tool returns JSON text content and
- * maps thrown errors to `isError: true` results (never raw stack traces).
- * One tool set serves both generations: the optional `target` argument
- * selects GX Works3 (default) or GX Works2; the ops instance is built per
- * call (stateless — every op re-attaches to the running window).
+ * Two tool families, one per transport:
+ *
+ * - UIA tools (gx_attach/write_st/read_st/build/get_output_errors) run through
+ *   the 64-bit PowerShell UIA worker — thin wrappers over GxWindowOps.
+ * - Simulation tools (gx_sim_*) run through a SECOND PsWorker spawned under
+ *   32-bit PowerShell (SysWOW64) because MX Component's ActUtlType is a
+ *   32-bit COM server. They verify program BEHAVIOR against GX Simulator2
+ *   (write inputs -> read outputs), which compilation alone cannot prove.
+ *
+ * Every tool returns JSON text content and maps thrown errors to
+ * `isError: true` results (never raw stack traces). One tool set serves both
+ * generations: the optional `target` argument selects GX Works3 (default) or
+ * GX Works2; the ops instance is built per call (stateless — every op
+ * re-attaches to the running window).
  *
  * Safety gates (write preview, read-back verification wording) live in the
  * factory assistant prompt; the tools themselves stay mechanical.
@@ -81,6 +90,61 @@ exports.TOOLS = [
                 target: TARGET_ARG
             }
         }
+    },
+    {
+        name: 'gx_sim_connect',
+        description: '连接 GX Simulator2 仿真器（经 MX Component ActUtlType，逻辑站号默认 1）。返回 CPU 运行状态（cpuRun）与扫描时间。前置条件：MX Component 已安装且 Communication Setup Utility 已把逻辑站号指向 GX Simulator2；GX Works2 中已点「调试>模拟开始/停止」且 PLC 写入完成（写入对话框进度到 100% 后必须手动点关闭）。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                station: { type: 'number', description: '逻辑站号（默认 1）' }
+            }
+        }
+    },
+    {
+        name: 'gx_sim_read',
+        description: '批量读取仿真器软元件当前值（位软元件返回 0/1，字软元件返回有符号 16 位值）。需先 gx_sim_connect。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                station: { type: 'number', description: '逻辑站号（默认 1，须与 connect 一致）' },
+                devices: { type: 'array', items: { type: 'string' }, description: '软元件名列表，如 ["X0","M0","Y10","D100"]' }
+            },
+            required: ['devices']
+        }
+    },
+    {
+        name: 'gx_sim_write',
+        description: '批量写入仿真器软元件值（位软元件 0/1，字软元件 -32768..32767）。用于驱动输入条件后观察程序行为，是「写 X → 读 Y」行为验证的核心手段。需先 gx_sim_connect。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                station: { type: 'number', description: '逻辑站号（默认 1，须与 connect 一致）' },
+                items: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            device: { type: 'string', description: '软元件名，如 X0' },
+                            value: { type: 'number', description: '写入值（位 0/1，字 -32768..32767）' }
+                        },
+                        required: ['device', 'value']
+                    },
+                    description: '写入项列表，如 [{"device":"X0","value":1}]'
+                }
+            },
+            required: ['items']
+        }
+    },
+    {
+        name: 'gx_sim_disconnect',
+        description: '断开 ActUtlType 连接（Close）。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                station: { type: 'number', description: '逻辑站号（默认 1，须与 connect 一致）' }
+            }
+        }
     }
 ];
 function json(value) {
@@ -104,8 +168,71 @@ function parseTarget(args) {
     }
     return args.target;
 }
-async function callTool(worker, name, args) {
+function parseStation(args) {
+    if (args.station === undefined)
+        return 1;
+    if (typeof args.station !== 'number' || !Number.isInteger(args.station) || args.station < 0) {
+        throw new Error(`参数 "station" 必须是非负整数，收到: ${JSON.stringify(args.station)}`);
+    }
+    return args.station;
+}
+/** Tools served by the 32-bit MX Component worker instead of GxWindowOps. */
+const SIM_TOOLS = new Set(['gx_sim_connect', 'gx_sim_read', 'gx_sim_write', 'gx_sim_disconnect']);
+function parseWriteItems(args) {
+    const raw = args.items;
+    if (!Array.isArray(raw) || raw.length === 0) {
+        throw new Error('参数 "items" 必须是非空数组（每项 {device, value}）');
+    }
+    return raw.map((entry, index) => {
+        if (typeof entry !== 'object' || entry === null) {
+            throw new Error(`items[${index}] 必须是对象`);
+        }
+        const item = entry;
+        if (typeof item.device !== 'string' || item.device.length === 0) {
+            throw new Error(`items[${index}].device 必须是非空字符串`);
+        }
+        if (typeof item.value !== 'number' || !Number.isInteger(item.value)) {
+            throw new Error(`items[${index}].value 必须是整数`);
+        }
+        return { device: item.device, value: item.value };
+    });
+}
+function parseDeviceList(args) {
+    const raw = args.devices;
+    if (!Array.isArray(raw) || raw.length === 0) {
+        throw new Error('参数 "devices" 必须是非空字符串数组');
+    }
+    return raw.map((entry, index) => {
+        if (typeof entry !== 'string' || entry.length === 0) {
+            throw new Error(`devices[${index}] 必须是非空字符串`);
+        }
+        return entry;
+    });
+}
+async function callTool(worker, name, args, simWorker) {
     try {
+        if (SIM_TOOLS.has(name)) {
+            if (!simWorker) {
+                throw new Error('仿真工具不可用：32 位 MX Component worker 未初始化（需 32 位 PowerShell 与 MX Component）');
+            }
+            const station = parseStation(args);
+            switch (name) {
+                case 'gx_sim_connect': {
+                    return json(await simWorker.call('open', { station }));
+                }
+                case 'gx_sim_read': {
+                    return json(await simWorker.call('read', { station, devices: parseDeviceList(args) }));
+                }
+                case 'gx_sim_write': {
+                    return json(await simWorker.call('write', { station, items: parseWriteItems(args) }));
+                }
+                case 'gx_sim_disconnect': {
+                    return json(await simWorker.call('close', { station }));
+                }
+                default:
+                    return errorResult(`unknown tool: ${name}`);
+            }
+        }
         const ops = new windowOps_1.GxWindowOps(worker, { target: parseTarget(args) });
         switch (name) {
             case 'gx_attach': {

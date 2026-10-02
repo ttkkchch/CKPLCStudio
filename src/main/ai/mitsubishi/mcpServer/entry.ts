@@ -12,9 +12,12 @@
  *
  * Handshake: initialize → notifications/initialized → tools/list → tools/call.
  */
+import os from 'node:os'
+import path from 'node:path'
 import readline from 'node:readline'
 
 import { PsWorker } from '../core/uia/psWorker'
+import { SIM_WORKER_SCRIPT } from '../core/sim/simWorkerScript'
 import { TOOLS, callTool, type ToolCallResult } from './tools'
 
 const SERVER_NAME = 'gx-works-bridge'
@@ -29,6 +32,23 @@ interface RpcRequest {
 }
 
 const worker = new PsWorker()
+
+// Simulation bridge: ActUtlType is a 32-bit COM server, so this worker MUST
+// run under the SysWOW64 PowerShell. Fails lazily (spawn ENOENT →
+// PsWorkerUnhealthyError) on systems without 32-bit PowerShell / MX Component.
+const SYSWOW_POWERSHELL = path.join(
+  process.env.SystemRoot ?? 'C:\\Windows',
+  'SysWOW64',
+  'WindowsPowerShell',
+  'v1.0',
+  'powershell.exe'
+)
+const simWorker = new PsWorker({
+  powershellPath: SYSWOW_POWERSHELL,
+  scriptPath: path.join(os.tmpdir(), 'ckplcstudio-gx-sim-worker.ps1'),
+  scriptContent: SIM_WORKER_SCRIPT,
+  defaultTimeoutMs: 15_000
+})
 
 function log(message: string): void {
   // stderr is protocol-safe (never parsed by the client as JSON-RPC).
@@ -53,7 +73,7 @@ async function handleToolCall(params: Record<string, unknown>): Promise<ToolCall
     params.arguments && typeof params.arguments === 'object' && !Array.isArray(params.arguments)
       ? (params.arguments as Record<string, unknown>)
       : {}
-  return callTool(worker, name, args)
+  return callTool(worker, name, args, simWorker)
 }
 
 async function dispatch(req: RpcRequest): Promise<void> {
@@ -116,6 +136,7 @@ function onLine(line: string): void {
 
 function shutdown(): void {
   worker.stop()
+  simWorker.stop()
 }
 
 const rl = readline.createInterface({ input: process.stdin, terminal: false })

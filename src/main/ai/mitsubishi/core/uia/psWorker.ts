@@ -43,6 +43,14 @@ export interface PsWorkerOptions {
   powershellPath?: string
   /** default per-call timeout; a timeout kills the child (UIA calls can wedge). */
   defaultTimeoutMs?: number
+  /**
+   * Worker script materialization path. Two PsWorker instances with different
+   * scripts (64-bit UIA vs 32-bit MX Component) must NOT share one temp file —
+   * a concurrent respawn would launch the wrong script.
+   */
+  scriptPath?: string
+  /** Worker script content (defaults to the 64-bit UIA worker script). */
+  scriptContent?: string
 }
 
 const SCRIPT_TEMP_PATH = path.join(os.tmpdir(), 'ckplcstudio-gx-uia-worker.ps1')
@@ -58,6 +66,8 @@ interface WorkerResponse {
 
 export class PsWorker {
   private readonly powershellPath: string
+  private readonly scriptPath: string
+  private readonly scriptContent: string
   private readonly defaultTimeoutMs: number
   private child: ChildProcessWithoutNullStreams | null = null
   private readonly pending = new Map<string, Pending>()
@@ -69,6 +79,8 @@ export class PsWorker {
 
   constructor(options: PsWorkerOptions = {}) {
     this.powershellPath = options.powershellPath ?? 'powershell.exe'
+    this.scriptPath = options.scriptPath ?? SCRIPT_TEMP_PATH
+    this.scriptContent = options.scriptContent ?? PS_WORKER_SCRIPT
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 20_000
   }
 
@@ -137,16 +149,16 @@ export class PsWorker {
 
   private spawnWorker(): ChildProcessWithoutNullStreams {
     try {
-      fs.writeFileSync(SCRIPT_TEMP_PATH, PS_WORKER_SCRIPT, 'utf8')
+      fs.writeFileSync(this.scriptPath, this.scriptContent, 'utf8')
     } catch (err) {
       this.consecutiveSpawnFailures++
       throw new PsWorkerUnhealthyError(
-        `failed to materialize worker script at ${SCRIPT_TEMP_PATH}: ${err instanceof Error ? err.message : String(err)}`
+        `failed to materialize worker script at ${this.scriptPath}: ${err instanceof Error ? err.message : String(err)}`
       )
     }
     const child = spawn(
       this.powershellPath,
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT_TEMP_PATH],
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', this.scriptPath],
       { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }
     ) as ChildProcessWithoutNullStreams
     this.child = child

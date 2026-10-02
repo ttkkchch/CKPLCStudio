@@ -41,6 +41,8 @@ const MAX_STDERR_LINES = 20;
 const MAX_CONSECUTIVE_SPAWN_FAILURES = 3;
 class PsWorker {
     powershellPath;
+    scriptPath;
+    scriptContent;
     defaultTimeoutMs;
     child = null;
     pending = new Map();
@@ -51,6 +53,8 @@ class PsWorker {
     stopped = false;
     constructor(options = {}) {
         this.powershellPath = options.powershellPath ?? 'powershell.exe';
+        this.scriptPath = options.scriptPath ?? SCRIPT_TEMP_PATH;
+        this.scriptContent = options.scriptContent ?? psWorkerScript_1.PS_WORKER_SCRIPT;
         this.defaultTimeoutMs = options.defaultTimeoutMs ?? 20_000;
     }
     isAlive() {
@@ -115,13 +119,13 @@ class PsWorker {
     }
     spawnWorker() {
         try {
-            node_fs_1.default.writeFileSync(SCRIPT_TEMP_PATH, psWorkerScript_1.PS_WORKER_SCRIPT, 'utf8');
+            node_fs_1.default.writeFileSync(this.scriptPath, this.scriptContent, 'utf8');
         }
         catch (err) {
             this.consecutiveSpawnFailures++;
-            throw new PsWorkerUnhealthyError(`failed to materialize worker script at ${SCRIPT_TEMP_PATH}: ${err instanceof Error ? err.message : String(err)}`);
+            throw new PsWorkerUnhealthyError(`failed to materialize worker script at ${this.scriptPath}: ${err instanceof Error ? err.message : String(err)}`);
         }
-        const child = (0, node_child_process_1.spawn)(this.powershellPath, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT_TEMP_PATH], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+        const child = (0, node_child_process_1.spawn)(this.powershellPath, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', this.scriptPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
         this.child = child;
         child.on('error', (err) => {
             // Spawn failures (ENOENT, EACCES) surface here.

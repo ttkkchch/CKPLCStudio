@@ -17,13 +17,26 @@ Object.defineProperty(exports, "__esModule", { value: true });
  *
  * Handshake: initialize → notifications/initialized → tools/list → tools/call.
  */
+const node_os_1 = __importDefault(require("node:os"));
+const node_path_1 = __importDefault(require("node:path"));
 const node_readline_1 = __importDefault(require("node:readline"));
 const psWorker_1 = require("../core/uia/psWorker");
+const simWorkerScript_1 = require("../core/sim/simWorkerScript");
 const tools_1 = require("./tools");
 const SERVER_NAME = 'gx-works-bridge';
 const SERVER_VERSION = '0.1.0';
 const PROTOCOL_VERSION = '2024-11-05';
 const worker = new psWorker_1.PsWorker();
+// Simulation bridge: ActUtlType is a 32-bit COM server, so this worker MUST
+// run under the SysWOW64 PowerShell. Fails lazily (spawn ENOENT →
+// PsWorkerUnhealthyError) on systems without 32-bit PowerShell / MX Component.
+const SYSWOW_POWERSHELL = node_path_1.default.join(process.env.SystemRoot ?? 'C:\\Windows', 'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+const simWorker = new psWorker_1.PsWorker({
+    powershellPath: SYSWOW_POWERSHELL,
+    scriptPath: node_path_1.default.join(node_os_1.default.tmpdir(), 'ckplcstudio-gx-sim-worker.ps1'),
+    scriptContent: simWorkerScript_1.SIM_WORKER_SCRIPT,
+    defaultTimeoutMs: 15_000
+});
 function log(message) {
     // stderr is protocol-safe (never parsed by the client as JSON-RPC).
     process.stderr.write(`[gx-works-bridge] ${message}\n`);
@@ -42,7 +55,7 @@ async function handleToolCall(params) {
     const args = params.arguments && typeof params.arguments === 'object' && !Array.isArray(params.arguments)
         ? params.arguments
         : {};
-    return (0, tools_1.callTool)(worker, name, args);
+    return (0, tools_1.callTool)(worker, name, args, simWorker);
 }
 async function dispatch(req) {
     const id = req.id;
@@ -105,6 +118,7 @@ function onLine(line) {
 }
 function shutdown() {
     worker.stop();
+    simWorker.stop();
 }
 const rl = node_readline_1.default.createInterface({ input: process.stdin, terminal: false });
 rl.on('line', onLine);
