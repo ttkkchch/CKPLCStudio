@@ -8,6 +8,7 @@ import {
   bitValuesToBytes,
   buildBatchReadRequest,
   buildBatchWriteRequest,
+  buildRandomWriteBitRequest,
   bytesToBitValues,
   bytesToWordValues,
   parseResponse,
@@ -149,6 +150,59 @@ describe('parseResponse', () => {
     expect(() => parseResponse(hex('D0 00 00 FF FF 03 00 08 00 00 00 34 12 78 56'))).toThrow(
       /长度不一致/
     )
+  })
+})
+
+describe('buildRandomWriteBitRequest（1402 位单位随机写，2026-10-02 Simulator3 实测布局）', () => {
+  it('单点 X0=ON 生成实测生效帧（探针 probe_slmp7 rndWriteBit 逐字节）', () => {
+    const frame = buildRandomWriteBitRequest([{ device: parseDevice('X0'), on: true }])
+    expect(frame).toEqual(
+      hex('50 00 00 FF FF 03 00 0E 00 00 00 02 14 00 00 01 00 00 00 00 9C 01 00')
+    )
+  })
+
+  it('多点 M0=ON/M5=OFF：点数 2、每点 6 字节按调用顺序、数据 01 00 / 00 00', () => {
+    const frame = buildRandomWriteBitRequest([
+      { device: parseDevice('M0'), on: true },
+      { device: parseDevice('M5'), on: false }
+    ])
+    expect(frame).toEqual(
+      hex('50 00 00 FF FF 03 00 14 00 00 00 02 14 00 00 02 00 00 00 00 90 01 00 05 00 00 90 00 00')
+    )
+  })
+
+  it('自定义访问路径与监视定时器逐字段生效', () => {
+    const frame = buildRandomWriteBitRequest([{ device: parseDevice('Y5'), on: true }], {
+      networkNo: 5,
+      pcNo: 0x10,
+      requestDestModuleIo: 0x03e0,
+      requestDestModuleStationNo: 2,
+      monitoringTimer: 4
+    })
+    // Y5 八进制 → 线性 5；Y 代码 0x9D
+    expect(frame).toEqual(
+      hex('50 00 05 10 E0 03 02 0E 00 04 00 02 14 00 00 01 00 05 00 00 9D 01 00')
+    )
+  })
+
+  it('空数组抛错', () => {
+    expect(() => buildRandomWriteBitRequest([])).toThrow(/不能为空/)
+  })
+
+  it('软元件编号超出 3 字节范围抛错', () => {
+    const bad = { code: 0xa8, name: 'D', number: 0x1000000, unit: 'word' as const }
+    expect(() => buildRandomWriteBitRequest([{ device: bad, on: true }])).toThrow(/3 字节/)
+  })
+
+  it('数据长度字段 = 总长 − 9（多点时回填正确）', () => {
+    const items = Array.from({ length: 10 }, (_, i) => ({
+      device: parseDevice(`M${i}`),
+      on: i % 2 === 0
+    }))
+    const frame = buildRandomWriteBitRequest(items)
+    const declared = frame[7] | (frame[8] << 8)
+    expect(declared).toBe(frame.length - 9)
+    expect(declared).toBe(6 + 2 + 10 * 6)
   })
 })
 

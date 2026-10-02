@@ -18,7 +18,7 @@ import readline from 'node:readline'
 
 import { PsWorker } from '../core/uia/psWorker'
 import { SIM_WORKER_SCRIPT } from '../core/sim/simWorkerScript'
-import { TOOLS, callTool, type ToolCallResult } from './tools'
+import { TOOLS, callTool, closeAllWorks3Channels, type ToolCallResult } from './tools'
 
 const SERVER_NAME = 'gx-works-bridge'
 const SERVER_VERSION = '0.1.0'
@@ -140,6 +140,8 @@ function onLine(line: string): void {
 function shutdown(): void {
   worker.stop()
   simWorker.stop()
+  // works3 SLMP channels hold open TCP sockets — dispose them on exit.
+  closeAllWorks3Channels()
 }
 
 const rl = readline.createInterface({ input: process.stdin, terminal: false })

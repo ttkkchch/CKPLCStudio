@@ -210,6 +210,77 @@ export function buildBatchWriteRequest(
   return new Uint8Array(frame)
 }
 
+/**
+ * 随机写（位单位）命令 1402H —— GX Simulator3 实测唯一生效的位写通道
+ * （批量位写 1401+0001 不支持，2026-10-02 真机联调，见计划文档
+ * 「works3 失败样例 + Simulator3 SLMP 联调实测记录」节）。
+ * 标准手册 1402 另含字单位/混合模式，此处仅实现已实测的位单位布局。
+ */
+export const COMMAND_RANDOM_WRITE_BIT = 0x1402
+
+/** 随机写（位单位）单点条目 */
+export interface RandomWriteBitItem {
+  device: DeviceSpec
+  /** true=ON（数据 0x0001）/ false=OFF（数据 0x0000） */
+  on: boolean
+}
+
+/**
+ * 组装随机写（位单位）请求帧的公共头（子头→子命令为止）。
+ * 与 buildRequestFrame 分开：1402 没有"前导软元件指定+点数"字段，
+ * 数据区布局不同，不强行复用（既有 28 个帧测试 pin 了原函数字节输出）。
+ */
+function buildCommandHeader(command: number, subcommand: number, opts?: Slmp3eOptions): number[] {
+  const networkNo = opts?.networkNo ?? 0x00
+  const pcNo = opts?.pcNo ?? 0xff
+  const destIo = opts?.requestDestModuleIo ?? 0x03ff
+  const destStation = opts?.requestDestModuleStationNo ?? 0x00
+  const timer = opts?.monitoringTimer ?? 0x0000
+  const frame: number[] = [...REQUEST_SUBHEADER]
+  frame.push(networkNo, pcNo, destIo & 0xff, (destIo >> 8) & 0xff, destStation)
+  frame.push(0x00, 0x00)
+  appendU16Le(frame, timer)
+  appendU16Le(frame, command)
+  appendU16Le(frame, subcommand)
+  return frame
+}
+
+/**
+ * 组装随机写（位单位）请求帧：命令 1402H + 子命令 0000H + 点数 n，
+ * 每点 = 软元件指定 4 字节（编号 3 字节小端 + 软元件代码 1 字节）
+ * + 数据 2 字节（u16 LE，0001=ON / 0000=OFF）。
+ * 布局依 2026-10-02 GX Simulator3（R08CPU, 127.0.0.1:5511）实测生效帧
+ * （探针 %TEMP%\gx_probe\probe_slmp7.cjs rndWriteBit）。
+ */
+export function buildRandomWriteBitRequest(
+  items: RandomWriteBitItem[],
+  opts?: Slmp3eOptions
+): Uint8Array {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error('写数据不能为空')
+  }
+  if (items.length > 0xffff) {
+    throw new Error(`点数必须为 1..65535，实际 ${items.length}`)
+  }
+  for (const item of items) {
+    if (!Number.isInteger(item.device.number) || item.device.number < 0 || item.device.number > 0xffffff) {
+      throw new Error(`软元件编号超出 3 字节可表示范围（0..16777215）：${item.device.number}`)
+    }
+  }
+  // 1402 位单位的子命令固定 0000（位/字单位由数据区自描述，与 1401 的 0001 语义无关）
+  const frame = buildCommandHeader(COMMAND_RANDOM_WRITE_BIT, SUBCOMMAND_WORD_UNITS, opts)
+  appendU16Le(frame, items.length)
+  for (const item of items) {
+    const d = item.device
+    frame.push(d.number & 0xff, (d.number >> 8) & 0xff, (d.number >> 16) & 0xff, d.code & 0xff)
+    frame.push(item.on ? 0x01 : 0x00, 0x00)
+  }
+  const dataLength = frame.length - HEADER_LENGTH
+  frame[7] = dataLength & 0xff
+  frame[8] = (dataLength >> 8) & 0xff
+  return new Uint8Array(frame)
+}
+
 /** 3E 帧响应解析结果 */
 export interface Slmp3eResponse {
   /** 结束代码：0x0000 正常，非 0 为 PLC 侧错误码（如 0xC05D 命令错误） */

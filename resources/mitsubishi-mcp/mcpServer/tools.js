@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TOOLS = void 0;
+exports.closeAllWorks3Channels = closeAllWorks3Channels;
 exports.callTool = callTool;
 /**
  * Tool surface of the GX Works stdio MCP bridge.
@@ -11,11 +12,13 @@ exports.callTool = callTool;
  *   run through the 64-bit PowerShell UIA worker — thin wrappers over
  *   GxWindowOps. gx_sim_start is UI-only automation (menu click + dialog
  *   shepherding), so it rides the UIA worker even though its name says sim.
- * - Simulation tools (gx_sim_connect/read/write/disconnect) run through a
- *   SECOND PsWorker spawned under 32-bit PowerShell (SysWOW64) because MX
- *   Component's ActUtlType is a 32-bit COM server. They verify program
- *   BEHAVIOR against GX Simulator2 (write inputs -> read outputs), which
- *   compilation alone cannot prove.
+ * - Simulation tools (gx_sim_connect/read/write/disconnect): target=works2
+ *   (default) routes through a SECOND PsWorker spawned under 32-bit
+ *   PowerShell (SysWOW64) because MX Component's ActUtlType is a 32-bit COM
+ *   server; target=works3 routes through Simulator3Gateway (SLMP over TCP
+ *   127.0.0.1:5511 — pure Node, no COM, no 32-bit requirement). They verify
+ *   program BEHAVIOR against the simulator (write inputs -> read outputs),
+ *   which compilation alone cannot prove.
  *
  * Every tool returns JSON text content and maps thrown errors to
  * `isError: true` results (never raw stack traces). One tool set serves both
@@ -30,11 +33,21 @@ exports.callTool = callTool;
  */
 const locatorMap_1 = require("../core/uia/locatorMap");
 const windowOps_1 = require("../core/uia/windowOps");
+const simulator3_1 = require("../core/sim/simulator3");
 /** Shared per-tool argument: which GX Works generation to operate on. */
 const TARGET_ARG = {
     type: 'string',
     enum: ['works3', 'works2'],
     description: '目标平台：works3 = GX Works3（iQ-R/iQ-F 系列，默认）；works2 = GX Works2（Q/L/FX 系列，仅结构化工程的 ST 程序可注入）'
+};
+/**
+ * 仿真工具专用的 target 参数：与 TARGET_ARG 缺省值相反——4 个 gx_sim_* 工具
+ * 在 works3 支持加入前一直缺省服务 GX Simulator2，缺省必须保持 works2。
+ */
+const SIM_TARGET_ARG = {
+    type: 'string',
+    enum: ['works2', 'works3'],
+    description: '目标仿真器：works2 = GX Simulator2（经 MX Component ActUtlType，缺省）；works3 = GX Simulator3（SLMP 直连 127.0.0.1:5511，需先用 gx_sim_start 启动仿真）'
 };
 exports.TOOLS = [
     {
@@ -96,7 +109,7 @@ exports.TOOLS = [
     },
     {
         name: 'gx_sim_start',
-        description: '启动 GX Simulator2 仿真并自动完成 PLC 写入（仅 target=works2）。流程：杀掉已有模拟器进程做干净重启 → ESC 关闭残留对话框 → MSAA 点击「模拟」菜单（杀进程后第一次点击走停止路径，未启动会自动点第二次）→ 盯梢自动弹出的「PLC写入」对话框，进度到 100/100% 后自动点「关闭」（未勾选「处理结束时自动关闭」时对话框会永久挂起，模拟器里将始终是空程序）。完成后即可 gx_sim_connect 做行为验证。前置条件：GX Works2 已打开工程且编译通过。',
+        description: '启动内置仿真器并自动完成 PLC 写入。target=works3（缺省）：拒绝在 RSimRun3 已运行时点击（「模拟开始」是开关，再点会停止仿真）→ MSAA 点击「程序通用」工具栏的「模拟开始」→ 等 RSimRun3 进程 → 盯梢自动弹出的「写入至可编程控制器」对话框，进度到 100/100% 后自动点「关闭」→ 真实鼠标单击 Simulator3 窗口 SWITCH 面板的「RUN」按钮（该按钮只认真实点击，双击会诱发 error-stop）。target=works2：杀掉已有模拟器进程做干净重启 → ESC 关闭残留对话框 → MSAA 点击「模拟」菜单（杀进程后第一次点击走停止路径，未启动会自动点第二次）→ 盯梢「PLC写入」对话框，100/100% 后自动点「关闭」。两种流程完成后即可 gx_sim_connect 做行为验证。前置条件：GX Works 已打开工程且编译通过。',
         inputSchema: {
             type: 'object',
             properties: {
@@ -106,20 +119,22 @@ exports.TOOLS = [
     },
     {
         name: 'gx_sim_connect',
-        description: '连接 GX Simulator2 仿真器（经 MX Component ActUtlType，逻辑站号默认 1）。返回 CPU 运行状态（cpuRun）与扫描时间。前置条件：MX Component 已安装且 Communication Setup Utility 已把逻辑站号指向 GX Simulator2；GX Works2 中已启动模拟且 PLC 写入完成（建议直接用 gx_sim_start 自动完成启动+写入+关闭对话框）。',
+        description: '连接仿真器。target=works2（缺省）：GX Simulator2，经 MX Component ActUtlType（逻辑站号默认 1），返回 CPU 运行状态（cpuRun）与扫描时间；前置条件：MX Component 已安装且 Communication Setup Utility 已把逻辑站号指向 GX Simulator2。target=works3：GX Simulator3，SLMP 3E 帧直连 127.0.0.1:5511，返回 CPU 运行状态；前置条件：已用 gx_sim_start（target=works3）完成「模拟开始+写入+RUN」。两者均要求模拟已启动且 PLC 写入完成（建议直接用 gx_sim_start 自动完成）。',
         inputSchema: {
             type: 'object',
             properties: {
+                target: SIM_TARGET_ARG,
                 station: { type: 'number', description: '逻辑站号（默认 1）' }
             }
         }
     },
     {
         name: 'gx_sim_read',
-        description: '批量读取仿真器软元件当前值（位软元件返回 0/1，字软元件返回有符号 16 位值）。需先 gx_sim_connect。',
+        description: '批量读取仿真器软元件当前值（位软元件返回 0/1，字软元件返回有符号 16 位值）。works3：X 软元件按 nibble 半字节自动解码（每个 X 编号对应半字节中的 1 位），且 X 在仿真 RUN/STOP 切换后会被清零——切换状态后请重写输入再验证。需先 gx_sim_connect。',
         inputSchema: {
             type: 'object',
             properties: {
+                target: SIM_TARGET_ARG,
                 station: { type: 'number', description: '逻辑站号（默认 1，须与 connect 一致）' },
                 devices: { type: 'array', items: { type: 'string' }, description: '软元件名列表，如 ["X0","M0","Y10","D100"]' }
             },
@@ -128,10 +143,11 @@ exports.TOOLS = [
     },
     {
         name: 'gx_sim_write',
-        description: '批量写入仿真器软元件值（位软元件 0/1，字软元件 -32768..32767）。用于驱动输入条件后观察程序行为，是「写 X → 读 Y」行为验证的核心手段。需先 gx_sim_connect。',
+        description: '批量写入仿真器软元件值（位软元件 0/1，字软元件 -32768..32767）。用于驱动输入条件后观察程序行为，是「写 X → 读 Y」行为验证的核心手段。works3：位写走 SLMP 随机写位帧（命令 1402）；CPU 处于 RUN 时写入会被拒（SLMP 异常，错误信息含 RUN/STOP 指引）——请先在 GX Simulator3 窗口的 SWITCH 面板手动切到 STOP 再写。需先 gx_sim_connect。',
         inputSchema: {
             type: 'object',
             properties: {
+                target: SIM_TARGET_ARG,
                 station: { type: 'number', description: '逻辑站号（默认 1，须与 connect 一致）' },
                 items: {
                     type: 'array',
@@ -151,10 +167,11 @@ exports.TOOLS = [
     },
     {
         name: 'gx_sim_disconnect',
-        description: '断开 ActUtlType 连接（Close）。',
+        description: '断开仿真器连接（works2：Close ActUtlType；works3：关闭 SLMP TCP 连接）。',
         inputSchema: {
             type: 'object',
             properties: {
+                target: SIM_TARGET_ARG,
                 station: { type: 'number', description: '逻辑站号（默认 1，须与 connect 一致）' }
             }
         }
@@ -188,6 +205,18 @@ function parseStation(args) {
         throw new Error(`参数 "station" 必须是非负整数，收到: ${JSON.stringify(args.station)}`);
     }
     return args.station;
+}
+/**
+ * 仿真工具 target 解析：缺省 works2（兼容既有调用——4 个 gx_sim_* 工具在
+ * works3 支持加入前一直服务 GX Simulator2，无 target 时必须原路走 ActUtlType
+ * worker）。⚠ 勿复用 parseTarget（其缺省 works3 会造成 works2 回归）。
+ */
+function parseSimTarget(args) {
+    if (args.target === undefined || args.target === 'works2')
+        return 'works2';
+    if (args.target === 'works3')
+        return 'works3';
+    throw new Error(`参数 "target" 必须是 'works2' 或 'works3'，收到: ${JSON.stringify(args.target)}`);
 }
 /**
  * Tools served by the 32-bit MX Component worker instead of GxWindowOps.
@@ -226,9 +255,66 @@ function parseDeviceList(args) {
         return entry;
     });
 }
-async function callTool(worker, name, args, simWorker) {
+/** works3 未连接时 read/write 的统一错误文案 */
+const WORKS3_NOT_CONNECTED = '尚未连接 Simulator3——请先 gx_sim_connect（target=works3）';
+/**
+ * works3 仿真通道表：station → Simulator3Gateway（SLMP 直连 127.0.0.1:5511）。
+ * 跨调用保持：connect 建通道后 read/write 复用；disconnect 时移除。
+ */
+const DEFAULT_WORKS3_CHANNELS = new Map();
+/** 释放全部 works3 仿真通道（entry shutdown 用；不影响 works2 simWorker） */
+function closeAllWorks3Channels() {
+    for (const gateway of DEFAULT_WORKS3_CHANNELS.values())
+        gateway.dispose();
+    DEFAULT_WORKS3_CHANNELS.clear();
+}
+/**
+ * works3 仿真调用：经 Simulator3Gateway（SLMP 直连 RSimRun3）。connect 惰性
+ * 建通道（同站重复 connect 走 gateway 幂等重建）；read/write 未连接直接报错
+ * （不隐式建连——建连语义只归 connect）。
+ */
+async function works3SimCall(name, args, channels) {
+    const station = parseStation(args);
+    switch (name) {
+        case 'gx_sim_connect': {
+            let gateway = channels.get(station);
+            if (!gateway) {
+                gateway = (0, simulator3_1.createSimulator3Gateway)();
+                channels.set(station, gateway);
+            }
+            return json(await gateway.connect(station));
+        }
+        case 'gx_sim_disconnect': {
+            const gateway = channels.get(station);
+            if (!gateway)
+                return json({ station, closed: false });
+            const result = await gateway.disconnect(station);
+            channels.delete(station);
+            return json(result);
+        }
+        case 'gx_sim_read': {
+            const gateway = channels.get(station);
+            if (!gateway)
+                return errorResult(WORKS3_NOT_CONNECTED);
+            return json(await gateway.readDevices(station, parseDeviceList(args)));
+        }
+        case 'gx_sim_write': {
+            const gateway = channels.get(station);
+            if (!gateway)
+                return errorResult(WORKS3_NOT_CONNECTED);
+            return json(await gateway.writeItems(station, parseWriteItems(args)));
+        }
+        default:
+            return errorResult(`unknown tool: ${name}`);
+    }
+}
+async function callTool(worker, name, args, simWorker, works3Channels = DEFAULT_WORKS3_CHANNELS) {
     try {
         if (SIM_TOOLS.has(name)) {
+            const simTarget = parseSimTarget(args);
+            if (simTarget === 'works3') {
+                return await works3SimCall(name, args, works3Channels);
+            }
             if (!simWorker) {
                 throw new Error('仿真工具不可用：32 位 MX Component worker 未初始化（需 32 位 PowerShell 与 MX Component）');
             }

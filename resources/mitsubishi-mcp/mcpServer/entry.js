@@ -122,6 +122,8 @@ function onLine(line) {
 function shutdown() {
     worker.stop();
     simWorker.stop();
+    // works3 SLMP channels hold open TCP sockets — dispose them on exit.
+    (0, tools_1.closeAllWorks3Channels)();
 }
 const rl = node_readline_1.default.createInterface({ input: process.stdin, terminal: false });
 rl.on('line', onLine);

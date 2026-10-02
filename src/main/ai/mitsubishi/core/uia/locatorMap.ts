@@ -84,6 +84,31 @@ export interface GxMsaaLocators {
   readonly confirmButtonName?: string
 }
 
+/**
+ * Simulator3（works3）仿真流程定位参数 —— gx_sim_start 全部 UI 名单（data-only）。
+ * 2026-10-02 真机校准（GX Works3 1.128J zh-CN + GX Simulator3）：
+ * - 模拟开始 = 「程序通用」工具栏按钮，MSAA BFS 点击（menuBarName=程序通用）
+ * - 启动后自动弹「写入至可编程控制器」对话框，进度 100/100% 后须点「关闭」
+ *   （否则对话框永久挂起，模拟器里始终是空程序）
+ * - 仿真器面板窗口标题 GX Simulator3；SWITCH 面板 RUN/STOP 仅真实鼠标单击
+ *   生效（合成 InvokePattern 无效），且双击会诱发 error-stop
+ * - 模拟器进程名 RSimRun3（works2 是 QuteSimRun/SimManager）
+ */
+export interface GxSimLocators {
+  /** msaaClickMenu 的 menuBarName 参数：模拟开始按钮所在工具栏的 UIA Name */
+  readonly simStartToolbarName: string
+  /** 启动仿真后自动弹出的 PLC 写入对话框标题（精确匹配） */
+  readonly simWriteDialogTitle: string
+  /** 写入进度到 100% 后要点击的关闭按钮名（与 works2 写入对话框同文案） */
+  readonly simWriteCloseButton: string
+  /** 模拟器进程名（findProcess / 已运行检测 / waitForSimProcess） */
+  readonly simProcessName: string
+  /** 仿真器面板窗口标题（realClickChild 的 title 参数） */
+  readonly simPanelWindowTitle: string
+  /** SWITCH 面板 RUN 按钮名（realClickChild 的 childName 参数） */
+  readonly simSwitchRunButtonName: string
+}
+
 /** Per-generation profile: how to find the window, compile menus and output pane. */
 export interface GxPlatformProfile {
   readonly target: GxTarget
@@ -132,7 +157,40 @@ export interface GxPlatformProfile {
    * Simple-ladder projects expose no ST editor to inject into at all.
    */
   readonly stRequiresStructuredProject: boolean
+  /**
+   * Simulator3 仿真流程定位（works3 专属）。缺省 = 该代际无已校准的
+   * Simulator3 启动流程（works2 的仿真启动走自己的 simStartMenuItem +
+   * GX_PLC_WRITE_* 常量，不读这里）。
+   */
+  readonly sim?: GxSimLocators
 }
+
+/**
+ * Auto PLC-write dialog shown by works2 when a simulation starts (probe_w2_31,
+ * 2026-10-01): a top-level #32770 titled exactly PLC写入. Without 「处理结束时
+ * 自动关闭」checked it stays open forever after reaching 100/100% — the
+ * simulator then runs an EMPTY program (SM400 scans but the logic never
+ * transfers) — so the flow must click its 关闭 pushbutton (MSAA role 43).
+ *
+ * works3 的 Simulator3 启动同样弹写入对话框（标题不同，见 GX_SIM3_*），关闭
+ * 按钮文案相同，故两代共用 GX_PLC_WRITE_CLOSE_BUTTON。
+ */
+export const GX_PLC_WRITE_DIALOG_TITLE = 'PLC写入'
+export const GX_PLC_WRITE_CLOSE_BUTTON = '关闭'
+
+// ---- GX Simulator3（works3）仿真流程常量（2026-10-02 真机校准） ----
+/** 模拟开始按钮所在工具栏的 UIA Name（msaaClickMenu 的 menuBarName 参数） */
+export const GX_SIM3_SIMSTART_TOOLBAR = '程序通用'
+/** 模拟开始命令名（工具栏项，MSAA StartsWith 前缀） */
+export const GX_SIM3_SIMSTART_ITEM = '模拟开始'
+/** 启动仿真后自动弹出的写入对话框标题（精确匹配；进度到 100/100% 后点关闭） */
+export const GX_SIM3_WRITE_DIALOG_TITLE = '写入至可编程控制器'
+/** GX Simulator3 模拟器进程名 */
+export const GX_SIM3_SIM_PROCESS = 'RSimRun3'
+/** 仿真器面板窗口标题（realClickChild 的 title） */
+export const GX_SIM3_PANEL_TITLE = 'GX Simulator3'
+/** SWITCH 面板 RUN 按钮名（真实鼠标单击；同面板 STOP 为切换停止） */
+export const GX_SIM3_SWITCH_RUN_BUTTON = 'RUN'
 
 const WORKS3_PROFILE: GxPlatformProfile = {
   target: 'works3',
@@ -147,6 +205,10 @@ const WORKS3_PROFILE: GxPlatformProfile = {
     // Calibrated: 全部转换(R) inside 转换(C); MSAA BFS + accDoDefaultAction
     // clicks it without physically expanding the menu.
     compileAllMenuItem: { names: ['全部转换'] },
+    // Calibrated live 2026-10-02: 模拟开始 lives on the 程序通用 toolbar (NOT
+    // 菜单栏) — the sim-start click pins menuBarName=程序通用 (see sim
+    // locators) so same-caption buttons on other toolbars are never hit.
+    simStartMenuItem: { names: [GX_SIM3_SIMSTART_ITEM] },
     // Bottom dock pane content sits under XTPDockingPaneTabbedContainer →
     // Afx:00300000:0 → #32770; pane lookup kept for the generic grid fallback.
     outputPane: { names: ['输出', 'Output', '出力'], controlType: 'Window' }
@@ -192,7 +254,19 @@ const WORKS3_PROFILE: GxPlatformProfile = {
    * is the only reliable route (focusEditor matches it by prefix).
    */
   editorFocusClassName: 'WindowsForms10.Window.8.app.',
-  stRequiresStructuredProject: false
+  stRequiresStructuredProject: false,
+  // Simulator3 start flow, calibrated live 2026-10-02 (see GxSimLocators doc):
+  // 程序通用 toolbar 模拟开始 → 写入至可编程控制器 dialog auto-close at 100%
+  // → RSimRun3 process → GX Simulator3 panel RUN button needs a REAL mouse
+  // click (synthetic invoke does not flip it).
+  sim: {
+    simStartToolbarName: GX_SIM3_SIMSTART_TOOLBAR,
+    simWriteDialogTitle: GX_SIM3_WRITE_DIALOG_TITLE,
+    simWriteCloseButton: GX_PLC_WRITE_CLOSE_BUTTON,
+    simProcessName: GX_SIM3_SIM_PROCESS,
+    simPanelWindowTitle: GX_SIM3_PANEL_TITLE,
+    simSwitchRunButtonName: GX_SIM3_SWITCH_RUN_BUTTON
+  }
 }
 
 /**
@@ -302,14 +376,5 @@ export const GX_ST_PASTE_KEYS = '^v'
  */
 export const GX_BUILD_CONFIRM_KEYS = '{ENTER}'
 
-/**
- * Auto PLC-write dialog shown by works2 when a simulation starts (probe_w2_31,
- * 2026-10-01): a top-level #32770 titled exactly PLC写入. Without 「处理结束时
- * 自动关闭」checked it stays open forever after reaching 100/100% — the
- * simulator then runs an EMPTY program (SM400 scans but the logic never
- * transfers) — so the flow must click its 关闭 pushbutton (MSAA role 43).
- */
-export const GX_PLC_WRITE_DIALOG_TITLE = 'PLC写入'
-export const GX_PLC_WRITE_CLOSE_BUTTON = '关闭'
-/** Simulator processes killed for a clean restart before gx_sim_start. */
+/** Simulator processes killed for a clean restart before works2 gx_sim_start. */
 export const GX_SIM_PROCESS_NAMES = ['QuteSimRun', 'SimManager'] as const

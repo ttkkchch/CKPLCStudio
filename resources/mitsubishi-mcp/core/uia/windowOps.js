@@ -400,8 +400,10 @@ class GxWindowOps {
         return lines.filter((line) => this.outputErrorPattern().test(line));
     }
     /**
-     * Start GX Simulator2 from works2 and shepherd the automatic PLC write to
-     * completion (works2 only — works3's Simulator3 flow is uncalibrated).
+     * Start the built-in simulator and shepherd the automatic PLC write to
+     * completion. works3 dispatches to the Simulator3 flow (simStartWorks3 —
+     * real-click RUN switch, no kill/restart); the sequence below is the
+     * works2 / GX Simulator2 path.
      *
      * Live-calibrated sequence (probe_w2_27/29/30/31, 2026-10-01):
      * 1. force-kill QuteSimRun/SimManager for a CLEAN restart — works2 then
@@ -421,8 +423,10 @@ class GxWindowOps {
      *    the dialog closes.
      */
     async simStart() {
+        if (this.profile.sim)
+            return this.simStartWorks3();
         if (this.profile.target !== 'works2') {
-            throw new Error('gx_sim_start 目前仅支持 target=works2（GX Works3 的 Simulator3 启动流程尚未校准）');
+            throw new Error(`gx_sim_start 不支持 target=${this.profile.target}（该代际无已校准的仿真启动流程）`);
         }
         const item = this.profile.locators.simStartMenuItem;
         const menuBarName = this.profile.msaa.menuBarName;
@@ -483,66 +487,7 @@ class GxWindowOps {
                 `请确认工程支持模拟且通信设置正确`);
         }
         // 4) Shepherd the auto PLC write dialog (empty-program guard — see above).
-        let plcWriteSeen = false;
-        let closedBy = 'not-seen';
-        let lastProgress;
-        let gonePolls = 0;
-        const writeDeadline = Date.now() + this.plcWriteTimeoutMs;
-        const seenGraceDeadline = Date.now() + this.plcWriteGraceMs;
-        while (true) {
-            await this.sleep(this.pollMs);
-            const dlg = await this.findPlcWriteDialog(win.handle);
-            if (!dlg || !dlg.handle) {
-                if (!plcWriteSeen) {
-                    if (Date.now() >= seenGraceDeadline)
-                        break; // never appeared — write finished instantly or not needed
-                    continue;
-                }
-                gonePolls++;
-                if (gonePolls >= 2) {
-                    closedBy = 'auto'; // vanished without our click (auto-close was checked)
-                    break;
-                }
-                continue;
-            }
-            plcWriteSeen = true;
-            gonePolls = 0;
-            let joined = '';
-            try {
-                const texts = await this.worker.call('dialogProgress', { handle: dlg.handle });
-                joined = (texts.texts ?? []).join(' ');
-            }
-            catch {
-                /* transient MSAA hiccup — the next poll retries */
-            }
-            if (joined)
-                lastProgress = joined;
-            if (!/\b100\s*\/\s*100\s*%/.test(joined)) {
-                if (Date.now() >= writeDeadline) {
-                    throw new Error(`「${locatorMap_1.GX_PLC_WRITE_DIALOG_TITLE}」对话框在 ${Math.round(this.plcWriteTimeoutMs / 1000)}s 内未完成写入` +
-                        `（最后进度: ${lastProgress ?? '不可读'}）——请在对话框中勾选「处理结束时自动关闭」后重试`);
-                }
-                continue;
-            }
-            // Progress complete — let the dialog settle, click 关闭, verify it closes.
-            await this.sleep(1500);
-            const click = await this.worker.call('clickDialogButton', {
-                handle: dlg.handle,
-                name: locatorMap_1.GX_PLC_WRITE_CLOSE_BUTTON
-            });
-            if (!click.clicked) {
-                throw new Error(`「${locatorMap_1.GX_PLC_WRITE_DIALOG_TITLE}」已达 100% 但点击「${locatorMap_1.GX_PLC_WRITE_CLOSE_BUTTON}」失败（${click.result}）`);
-            }
-            closedBy = 'close-button';
-            const goneDeadline = Date.now() + 5000;
-            while (await this.findPlcWriteDialog(win.handle)) {
-                if (Date.now() >= goneDeadline) {
-                    throw new Error(`已点击「${locatorMap_1.GX_PLC_WRITE_CLOSE_BUTTON}」但「${locatorMap_1.GX_PLC_WRITE_DIALOG_TITLE}」对话框仍未关闭`);
-                }
-                await this.sleep(300);
-            }
-            break;
-        }
+        const write = await this.shepherdWriteDialog(win.handle, locatorMap_1.GX_PLC_WRITE_DIALOG_TITLE, locatorMap_1.GX_PLC_WRITE_CLOSE_BUTTON);
         return {
             ok: true,
             title: win.title,
@@ -550,16 +495,126 @@ class GxWindowOps {
             strayDialogsClosed,
             simClicks,
             simMenuPath,
-            plcWriteClosedBy: closedBy,
-            lastProgress
+            plcWriteClosedBy: write.closedBy,
+            lastProgress: write.lastProgress
         };
     }
+    /**
+     * Start GX Simulator3 from works3 (live-calibrated 2026-10-02):
+     * 1. REFUSE when RSimRun3 is already running — 「模拟开始」is a TOGGLE and a
+     *    second click would STOP the simulation (the caller should just
+     *    gx_sim_connect instead);
+     * 2. ESC away stray top-level #32770 dialogs (they would swallow the click);
+     * 3. MSAA click 「模拟开始」on the 「程序通用」toolbar (a top-level menu item
+     *    at 2 BFS segments; no restart double-click semantics on works3);
+     * 4. wait for the RSimRun3 process, then shepherd the auto
+     *    「写入至可编程控制器」dialog to completion (same empty-program guard as
+     *    works2);
+     * 5. real-mouse click the RUN button of the Simulator3 SWITCH panel — the
+     *    button ignores synthetic UIA/MSAA invokes, only a genuine click at
+     *    real screen coordinates takes effect (and a double-click can trip the
+     *    error-stop state, so exactly ONE click).
+     */
+    async simStartWorks3() {
+        const sim = this.profile.sim;
+        if (!sim) {
+            throw new Error(`${this.profile.displayName} profile 缺少 Simulator3 定位配置（sim）`);
+        }
+        const item = this.profile.locators.simStartMenuItem;
+        const menuBarName = sim.simStartToolbarName;
+        if (!item) {
+            throw new Error(`${this.profile.displayName} profile 缺少仿真启动定位配置（simStartMenuItem）`);
+        }
+        const win = await this.attach();
+        const itemName = (asNames(item.names) ?? [''])[0];
+        // 1) 模拟开始 is a toggle: refuse instead of silently stopping the sim.
+        const proc = await this.worker.call('findProcess', {
+            names: [sim.simProcessName]
+        });
+        if ((proc.running ?? []).length > 0) {
+            throw new Error(`Simulator3 已在运行（${sim.simProcessName}）——「${itemName}」是开关，再点会停止仿真；` +
+                `直接 gx_sim_connect（target=works3）即可连接`);
+        }
+        // 2) Stray dialogs would swallow the menu click (single pass — no kill
+        //    happened, so no error-dialog wave is expected).
+        const strayDialogsClosed = await this.closeStrayDialogs(win.handle);
+        // 3) Click 「模拟开始」. An op can time out when a modal dialog blocks the
+        //    MSAA/UIA calls; catch, re-ESC and retry once (2 attempts total).
+        let simClicks = 0;
+        let simMenuPath = '';
+        let clickFailure = null;
+        let running = false;
+        for (const attempt of [1, 2]) {
+            let click;
+            try {
+                click = await this.worker.call('msaaClickMenu', { rootHandle: win.handle, itemName, menuBarName, minSegments: 2 }, 45_000);
+            }
+            catch (err) {
+                simClicks = attempt;
+                simMenuPath = err instanceof Error ? err.message : String(err);
+                clickFailure =
+                    `MSAA 点击「${itemName}」失败（${simMenuPath}）——` +
+                        `请确认 ${this.profile.displayName} 已打开工程且窗口未最小化`;
+                await this.closeStrayDialogs(win.handle);
+                continue;
+            }
+            simClicks = attempt;
+            simMenuPath = click.path;
+            if (!click.clicked) {
+                clickFailure =
+                    `MSAA 点击「${itemName}」失败（${click.path}）——` +
+                        `请确认 ${this.profile.displayName} 已打开工程且窗口未最小化`;
+                continue;
+            }
+            clickFailure = null;
+            running = await this.waitForSimProcess(this.simProcessWaitMs, [sim.simProcessName]);
+            if (running)
+                break;
+        }
+        if (!running) {
+            if (clickFailure)
+                throw new Error(clickFailure);
+            throw new Error(`已点击「${itemName}」但模拟器进程（${sim.simProcessName}）未在 ${Math.round(this.simProcessWaitMs / 1000)}s 内启动` +
+                `（最后一次: ${simMenuPath}）——请确认工程可仿真`);
+        }
+        // 4) Shepherd the auto write dialog (empty-program guard, shared with works2).
+        const write = await this.shepherdWriteDialog(win.handle, sim.simWriteDialogTitle, sim.simWriteCloseButton);
+        // 5) Flip the SWITCH panel to RUN with a REAL mouse click.
+        try {
+            const click = await this.worker.call('realClickChild', {
+                title: sim.simPanelWindowTitle,
+                childName: sim.simSwitchRunButtonName
+            });
+            const switchClick = {
+                windowTitle: sim.simPanelWindowTitle,
+                buttonName: sim.simSwitchRunButtonName,
+                x: click.x ?? 0,
+                y: click.y ?? 0
+            };
+            return {
+                ok: true,
+                title: win.title,
+                killedProcesses: [],
+                strayDialogsClosed,
+                simClicks,
+                simMenuPath,
+                plcWriteClosedBy: write.closedBy,
+                lastProgress: write.lastProgress,
+                switchClick
+            };
+        }
+        catch (err) {
+            const detail = err instanceof Error ? err.message : String(err);
+            throw new Error(`仿真已启动但切换 RUN 失败（${detail}）——请在 GX Simulator3 窗口的 SWITCH 面板手动单击「${sim.simSwitchRunButtonName}」` +
+                `（单击即可，双击会诱发 error-stop）`);
+        }
+    }
     /** Poll for the simulator runtime process (the start-click success gate). */
-    async waitForSimProcess(waitMs) {
+    async waitForSimProcess(waitMs, names = ['QuteSimRun']) {
         const deadline = Date.now() + waitMs;
         while (true) {
             const res = await this.worker.call('findProcess', {
-                names: ['QuteSimRun']
+                names: [...names]
             });
             if ((res.running ?? []).length > 0)
                 return true;
@@ -602,19 +657,90 @@ class GxWindowOps {
         }
         return closed;
     }
-    /** The auto PLC写入 dialog: a titled top-level #32770 (pid-filtered scan). */
-    async findPlcWriteDialog(mainHandle) {
+    /** A titled top-level #32770 dialog of the GX Works process (pid-filtered scan). */
+    async findTitledTopDialog(mainHandle, title) {
         try {
             const res = await this.worker.call('findDialog', {
                 rootHandle: mainHandle,
                 className: '#32770',
                 search: 'top-level'
             });
-            return (res.dialogs ?? []).find((d) => d.name === locatorMap_1.GX_PLC_WRITE_DIALOG_TITLE) ?? null;
+            return (res.dialogs ?? []).find((d) => d.name === title) ?? null;
         }
         catch {
             return null;
         }
+    }
+    /**
+     * Watch the auto PLC-write dialog (titled top-level #32770) until it closes
+     * — shared by both generations (works2 PLC写入 / works3
+     * 写入至可编程控制器). Without 「处理结束时自动关闭」checked it sits at
+     * 100/100% forever and the simulator keeps running an EMPTY program — so
+     * once the progress text reaches 100/100%, click the close pushbutton (MSAA
+     * role 43) and verify the dialog closes.
+     */
+    async shepherdWriteDialog(mainHandle, dialogTitle, closeButton) {
+        let plcWriteSeen = false;
+        let closedBy = 'not-seen';
+        let lastProgress;
+        let gonePolls = 0;
+        const writeDeadline = Date.now() + this.plcWriteTimeoutMs;
+        const seenGraceDeadline = Date.now() + this.plcWriteGraceMs;
+        while (true) {
+            await this.sleep(this.pollMs);
+            const dlg = await this.findTitledTopDialog(mainHandle, dialogTitle);
+            if (!dlg || !dlg.handle) {
+                if (!plcWriteSeen) {
+                    if (Date.now() >= seenGraceDeadline)
+                        break; // never appeared — write finished instantly or not needed
+                    continue;
+                }
+                gonePolls++;
+                if (gonePolls >= 2) {
+                    closedBy = 'auto'; // vanished without our click (auto-close was checked)
+                    break;
+                }
+                continue;
+            }
+            plcWriteSeen = true;
+            gonePolls = 0;
+            let joined = '';
+            try {
+                const texts = await this.worker.call('dialogProgress', { handle: dlg.handle });
+                joined = (texts.texts ?? []).join(' ');
+            }
+            catch {
+                /* transient MSAA hiccup — the next poll retries */
+            }
+            if (joined)
+                lastProgress = joined;
+            if (!/\b100\s*\/\s*100\s*%/.test(joined)) {
+                if (Date.now() >= writeDeadline) {
+                    throw new Error(`「${dialogTitle}」对话框在 ${Math.round(this.plcWriteTimeoutMs / 1000)}s 内未完成写入` +
+                        `（最后进度: ${lastProgress ?? '不可读'}）——请在对话框中勾选「处理结束时自动关闭」后重试`);
+                }
+                continue;
+            }
+            // Progress complete — let the dialog settle, click the close button, verify it closes.
+            await this.sleep(1500);
+            const click = await this.worker.call('clickDialogButton', {
+                handle: dlg.handle,
+                name: closeButton
+            });
+            if (!click.clicked) {
+                throw new Error(`「${dialogTitle}」已达 100% 但点击「${closeButton}」失败（${click.result}）`);
+            }
+            closedBy = 'close-button';
+            const goneDeadline = Date.now() + 5000;
+            while (await this.findTitledTopDialog(mainHandle, dialogTitle)) {
+                if (Date.now() >= goneDeadline) {
+                    throw new Error(`已点击「${closeButton}」但「${dialogTitle}」对话框仍未关闭`);
+                }
+                await this.sleep(300);
+            }
+            break;
+        }
+        return { closedBy, lastProgress };
     }
     /** Per-generation error classifier (works2 classifies by the 结果 cell). */
     outputErrorPattern() {

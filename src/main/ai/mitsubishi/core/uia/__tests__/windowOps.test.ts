@@ -42,6 +42,8 @@ class FakeWorker implements PsWorkerLike {
   clickDialogButtonOk = true
   /** >0 → the next N msaaClickMenu ops throw (simulated op timeout). */
   menuClickFailTimes = 0
+  /** true → the works3 SWITCH-panel RUN real-mouse click succeeds. */
+  realClickOk = true
   /** Hook fired on every MSAA menu click (drives simulated sim start). */
   onMenuClick?: () => void
   /** Hook fired when the dialog button click succeeds. */
@@ -111,6 +113,12 @@ class FakeWorker implements PsWorkerLike {
       }
       case 'findProcess':
         return { running: this.processes.map((name, i) => ({ name, pid: 1000 + i })) } as T
+      case 'realClickChild': {
+        if (!this.realClickOk) {
+          throw new Error(`element not found (realClickChild: ${String(params.childName)})`)
+        }
+        return { clicked: true, name: String(params.childName), x: 120, y: 80, handle: 900 } as T
+      }
       case 'dialogProgress': {
         if (!this.plcWriteTexts) return { texts: [] } as T
         return { texts: this.plcWriteTexts() } as T
@@ -535,6 +543,9 @@ function makeSimOps(fake: FakeWorker): GxWindowOps {
   return makeOps(fake, SIM_OPTS)
 }
 
+/** Same timings, but the works3 / Simulator3 flow. */
+const SIM3_OPTS: Partial<WindowOpsOptions> = { ...SIM_OPTS, target: 'works3' }
+
 describe('GxWindowOps.simStart', () => {
   function makeStartedFake(clicksToStart = 1): FakeWorker {
     const fake = new FakeWorker()
@@ -557,11 +568,6 @@ describe('GxWindowOps.simStart', () => {
     }
     return fake
   }
-
-  it('rejects works3 (Simulator3 flow is uncalibrated)', async () => {
-    const fake = new FakeWorker()
-    await expect(makeOps(fake, { ...SIM_OPTS, target: 'works3' }).simStart()).rejects.toThrow('仅支持 target=works2')
-  })
 
   it('kills the simulator, starts with one click and closes the write dialog at 100%', async () => {
     const fake = makeStartedFake(1)
@@ -661,6 +667,91 @@ describe('GxWindowOps.simStart', () => {
     fake.processes = []
     await expect(makeSimOps(fake).simStart()).rejects.toThrow(/始终未启动/)
     expect(fake.calls.filter((c) => c.op === 'msaaClickMenu')).toHaveLength(3)
+    expect(fake.calls.some((c) => c.op === 'dialogProgress')).toBe(false)
+  })
+})
+
+describe('GxWindowOps.simStart (works3 / Simulator3)', () => {
+  function makeStartedFake3(): FakeWorker {
+    const fake = new FakeWorker()
+    fake.windows = [{ name: 'ProjC - [Main] - GX Works3', handle: 7 }]
+    let clicks = 0
+    let closed = false
+    fake.onMenuClick = () => {
+      clicks++
+      if (clicks >= 1) fake.processes = ['RSimRun3']
+    }
+    fake.onDialogButtonClick = () => {
+      closed = true
+    }
+    fake.plcWriteDialogs = () =>
+      clicks >= 1 && !closed ? [{ handle: 310, name: '写入至可编程控制器', className: '#32770', controlType: 'Window' }] : []
+    let polls = 0
+    fake.plcWriteTexts = () => {
+      polls++
+      return polls === 1 ? ['模拟写入 52/100%'] : ['模拟写入 100/100%']
+    }
+    return fake
+  }
+
+  it('starts with one click, closes the write dialog and real-clicks the RUN switch', async () => {
+    const fake = makeStartedFake3()
+    const result = await makeOps(fake, SIM3_OPTS).simStart()
+    expect(result.ok).toBe(true)
+    // works3 never kills a running simulator (no clean-restart semantics).
+    expect(result.killedProcesses).toEqual([])
+    expect(fake.calls.some((c) => c.op === 'stopProcess')).toBe(false)
+    expect(result.simClicks).toBe(1)
+    expect(result.plcWriteClosedBy).toBe('close-button')
+    expect(result.lastProgress).toContain('100/100%')
+    // Pinned works3 click parameters: 模拟开始 on the 程序通用 toolbar.
+    const menu = fake.calls.find((c) => c.op === 'msaaClickMenu')
+    expect(menu?.params.itemName).toBe('模拟开始')
+    expect(menu?.params.menuBarName).toBe('程序通用')
+    expect(menu?.params.minSegments).toBe(2)
+    // The SWITCH panel RUN button gets a REAL mouse click (synthetic invokes
+    // are ignored by that button).
+    const run = fake.calls.find((c) => c.op === 'realClickChild')
+    expect(run?.params).toEqual({ title: 'GX Simulator3', childName: 'RUN' })
+    expect(result.switchClick).toEqual({ windowTitle: 'GX Simulator3', buttonName: 'RUN', x: 120, y: 80 })
+    // The write dialog's 关闭 pushbutton is clicked on the dialog handle.
+    const close = fake.calls.find((c) => c.op === 'clickDialogButton')
+    expect(close?.params.name).toBe('关闭')
+    expect(close?.params.handle).toBe(310)
+  })
+
+  it('refuses to start when RSimRun3 already runs (模拟开始 is a toggle)', async () => {
+    const fake = makeStartedFake3()
+    fake.processes = ['RSimRun3']
+    await expect(makeOps(fake, SIM3_OPTS).simStart()).rejects.toThrow(/已在运行[\s\S]*开关/)
+    expect(fake.calls.some((c) => c.op === 'msaaClickMenu')).toBe(false)
+  })
+
+  it('hard-fails with manual-RUN guidance when the panel switch click fails', async () => {
+    const fake = makeStartedFake3()
+    fake.realClickOk = false
+    await expect(makeOps(fake, SIM3_OPTS).simStart()).rejects.toThrow(/手动单击[\s\S]*双击[\s\S]*error-stop/)
+  })
+
+  it('hard-fails with the last progress when the works3 write dialog hangs below 100%', async () => {
+    const fake = makeStartedFake3()
+    fake.plcWriteTexts = () => ['模拟写入 52/100%']
+    await expect(makeOps(fake, SIM3_OPTS).simStart()).rejects.toThrow(/未完成写入[\s\S]*52\/100%/)
+  })
+
+  it('retries the MSAA click once and hard-fails (no restart double-click on works3)', async () => {
+    const fake = makeStartedFake3()
+    fake.menuClickOk = false
+    await expect(makeOps(fake, SIM3_OPTS).simStart()).rejects.toThrow(/MSAA 点击「模拟开始」失败/)
+    expect(fake.calls.filter((c) => c.op === 'msaaClickMenu')).toHaveLength(2)
+  })
+
+  it('hard-fails when RSimRun3 never starts after the retried click', async () => {
+    const fake = makeStartedFake3()
+    fake.onMenuClick = () => {}
+    fake.processes = []
+    await expect(makeOps(fake, SIM3_OPTS).simStart()).rejects.toThrow(/未在.*s 内启动/)
+    expect(fake.calls.filter((c) => c.op === 'msaaClickMenu')).toHaveLength(2)
     expect(fake.calls.some((c) => c.op === 'dialogProgress')).toBe(false)
   })
 })

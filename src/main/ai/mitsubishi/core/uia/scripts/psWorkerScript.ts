@@ -97,6 +97,37 @@ public static class GxNative {
     [DllImport("kernel32.dll")] public static extern bool ReadProcessMemory(IntPtr proc, IntPtr addr, byte[] buf, IntPtr size, out IntPtr read);
     [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr h);
 
+    // Real-mouse-click support for Simulator3's SWITCH panel: synthetic
+    // InvokePattern does NOT flip its RUN/STOP toggle (2026-10-02 live probe),
+    // so the bridge moves the actual cursor and posts button events.
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowW(string className, string windowName);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
+    public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    public const uint MOUSEEVENTF_LEFTUP = 0x0004;
+
+    // Foreground with the AttachThreadInput bypass. Kept separate from the
+    // existing setForeground op (which owns its inline variant) — new callers
+    // (realClickChild) use this static method. Note: SetForegroundWindow may
+    // "succeed" while the foreground stays elsewhere, hence the final check.
+    public static bool ForceForeground(IntPtr hWnd) {
+        if (SetForegroundWindow(hWnd) && GetForegroundWindow() == hWnd) return true;
+        System.Threading.Thread.Sleep(80);
+        uint scratch = 0;
+        IntPtr fgNow = GetForegroundWindow();
+        uint fgThread = GetWindowThreadProcessId(fgNow, out scratch);
+        uint myThread = GetCurrentThreadId();
+        bool attached = false;
+        if (fgThread != 0 && fgThread != myThread) attached = AttachThreadInput(myThread, fgThread, true);
+        try {
+            BringWindowToTop(hWnd);
+            SetForegroundWindow(hWnd);
+        } finally {
+            if (attached) AttachThreadInput(myThread, fgThread, false);
+        }
+        return GetForegroundWindow() == hWnd;
+    }
+
     public class LvListResult {
         public long hwnd;
         public bool hasHeader;
@@ -709,6 +740,36 @@ function Invoke-Op([string]$op, $params) {
             if (-not $params.name) { throw 'clickDialogButton requires params.name' }
             $r = [GxMsaa]::ClickPushButton([IntPtr][int64]$params.handle, [string]$params.name)
             return @{ clicked = $r.StartsWith('CLICKED'); result = $r }
+        }
+        'realClickChild' {
+            if (-not $params.title) { throw 'realClickChild requires params.title' }
+            if (-not $params.childName) { throw 'realClickChild requires params.childName' }
+            # O(1) top-level lookup by exact title — a UIA desktop walk costs
+            # seconds over GX Works frames.
+            $h = [GxNative]::FindWindowW($null, [string]$params.title)
+            if ($h -eq [IntPtr]::Zero) { throw ('window not found: ' + $params.title) }
+            if ([GxNative]::IsIconic($h)) { [void][GxNative]::ShowWindow($h, 9) }
+            [void][GxNative]::ForceForeground($h)
+            Start-Sleep -Milliseconds 150
+            $root = [System.Windows.Automation.AutomationElement]::FromHandle($h)
+            $nameCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, [string]$params.childName)
+            $el = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $nameCond)
+            if ($null -eq $el) { throw ('child element not found: ' + $params.childName) }
+            # Real cursor move + button events: synthetic InvokePattern does
+            # not flip Simulator3 SWITCH RUN/STOP (2026-10-02 live probe) —
+            # only a genuine mouse click does.
+            try { $pt = $el.GetClickablePoint() } catch {
+                $r = $el.Current.BoundingRectangle
+                if ($r.IsEmpty) { throw ('no clickable point: ' + $params.childName) }
+                $pt = New-Object System.Windows.Point(($r.X + $r.Width / 2.0), ($r.Y + $r.Height / 2.0))
+            }
+            [void][GxNative]::SetCursorPos([int]$pt.X, [int]$pt.Y)
+            Start-Sleep -Milliseconds 60
+            [GxNative]::mouse_event([GxNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 60
+            [GxNative]::mouse_event([GxNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 120
+            return @{ clicked = $true; name = [string]$el.Current.Name; x = [int]$pt.X; y = [int]$pt.Y; handle = [int64]$h.ToInt64() }
         }
         'findProcess' {
             $running = @()
