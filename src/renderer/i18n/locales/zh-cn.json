@@ -1619,6 +1619,14 @@
         },
         "title": "分支管理"
       },
+      "health_notice": {
+        "clear_context_action": "清除上下文",
+        "context_size_tip": "本次请求约 {{tokens}} token，继续追加内容出现空回复的概率会明显升高。建议清除上下文或开启新对话。",
+        "context_size_title": "话题上下文已接近模型承载极限",
+        "empty_reply_tip": "模型把完整回答写进了思考过程，但没有生成正文——通常由上下文过大导致的偶发退化引起。点击「清除上下文」切断历史后重试即可。",
+        "empty_reply_title": "模型只输出了思考过程，没有生成正文",
+        "new_topic_hint": "或通过工具栏「新对话」另起话题"
+      },
       "more": "更多操作",
       "new": {
         "branch": {

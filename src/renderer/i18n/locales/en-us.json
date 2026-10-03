@@ -1619,6 +1619,14 @@
         },
         "title": "Branch Management"
       },
+      "health_notice": {
+        "clear_context_action": "Clear Context",
+        "context_size_tip": "This request used about {{tokens}} tokens. Adding more content significantly raises the chance of empty replies. Consider clearing the context or starting a new conversation.",
+        "context_size_title": "Topic context is approaching the model's limit",
+        "empty_reply_tip": "The model wrote its full answer into the reasoning process but produced no visible text — usually caused by occasional degradation when the context grows too large. Click \"Clear Context\" to cut off the history and retry.",
+        "empty_reply_title": "The model output reasoning only, with no visible reply",
+        "new_topic_hint": "Or start a new conversation from the toolbar"
+      },
       "more": "More actions",
       "new": {
         "branch": {

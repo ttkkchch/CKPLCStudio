@@ -41,6 +41,7 @@ import { isAskUserQuestionToolName } from '../tools/shared/agentToolTypes'
 import { hasPartParentToolCallId } from '../tools/toolParentMetadata'
 import { buildToolResponseFromPart, type ToolRenderItem, type ToolResponseLike } from '../tools/toolResponse'
 import type { MessageListItem } from '../types'
+import AssistantMessageHealthNotice from './AssistantMessageHealthNotice'
 import BlockErrorFallback from './BlockErrorFallback'
 import CompactBlock from './CompactBlock'
 import CompactionAnchorBlock from './CompactionAnchorBlock'
@@ -1389,6 +1390,12 @@ const MessagePartsRendererContent = React.memo(function MessagePartsRendererCont
           <MessageReportArtifacts toolResponses={reportArtifactToolResponses} />
         </AnimatedBlockWrapper>
       )}
+      <AssistantMessageHealthNotice
+        key={`health-notice-${message.id}`}
+        isActiveTurnProcessing={isActiveTurnProcessing}
+        message={message}
+        messageParts={messageParts}
+      />
     </AnimatePresence>
   )
 })

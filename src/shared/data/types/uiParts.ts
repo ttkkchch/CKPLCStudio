@@ -325,6 +325,32 @@ export function hasClearContextPart(parts: readonly CherryMessagePart[] | undefi
   return parts?.some((part) => part.type === CLEAR_CONTEXT_PART_TYPE) ?? false
 }
 
+/**
+ * 空回复守卫：助手消息只有思考（reasoning）、没有任何可见回复时为 true。
+ * 可见回复 = 非空 text、非空代码块（data-code）、工具调用（tool-* / dynamic-tool）或文件输出。
+ * 典型场景：长上下文下模型把完整答案写进 reasoning 后以零正文结束。
+ */
+export function hasReasoningWithoutReplyText(parts: readonly CherryMessagePart[] | undefined): boolean {
+  if (!parts || parts.length === 0) return false
+  let hasReasoning = false
+  for (const part of parts) {
+    if (part.type === 'reasoning') {
+      if (typeof part.text === 'string' && part.text.trim().length > 0) hasReasoning = true
+      continue
+    }
+    if (part.type === 'text') {
+      if (typeof part.text === 'string' && part.text.trim().length > 0) return false
+      continue
+    }
+    if (part.type === 'data-code') {
+      if (typeof part.data.content === 'string' && part.data.content.trim().length > 0) return false
+      continue
+    }
+    if (part.type === 'dynamic-tool' || part.type.startsWith('tool-') || part.type === 'file') return false
+  }
+  return hasReasoning
+}
+
 /** Replace the aggregate knowledge scope part while preserving every content part. */
 export function withKnowledgeScopePart(parts: CherryMessagePart[], baseIds: readonly string[]): CherryMessagePart[] {
   const contentParts = parts.filter((part) => part.type !== KNOWLEDGE_SCOPE_PART_TYPE)

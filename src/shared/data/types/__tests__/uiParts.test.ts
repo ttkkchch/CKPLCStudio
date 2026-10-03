@@ -12,6 +12,7 @@ import {
   type DiagnosisResult,
   getKnowledgeBaseIdsFromParts,
   hasClearContextPart,
+  hasReasoningWithoutReplyText,
   KnowledgeScopePartDataSchema,
   readCherryMeta,
   withCherryMeta,
@@ -353,5 +354,73 @@ describe('withCherryMeta', () => {
     // @ts-expect-error transport is not on CherryTextMeta
     withCherryMeta(part, { transport: 'x' })
     expect(true).toBe(true)
+  })
+})
+
+describe('hasReasoningWithoutReplyText', () => {
+  const reasoning = (text: string): ReasoningUIPart => ({ type: 'reasoning', text })
+  const text = (value: string): TextUIPart => ({ type: 'text', text: value })
+  const dataCode = (content: string) =>
+    ({ type: 'data-code', data: { content, language: 'ladder' } }) as unknown as CherryMessagePart
+  const toolPart = (type: string) =>
+    ({
+      type,
+      toolCallId: 'call-1',
+      state: 'output-available',
+      input: {}
+    }) as unknown as CherryMessagePart
+  const filePart = { type: 'file', mediaType: 'image/png', url: 'data:image/png;base64,x' } as unknown as CherryMessagePart
+
+  it('returns false for undefined or empty parts', () => {
+    expect(hasReasoningWithoutReplyText(undefined)).toBe(false)
+    expect(hasReasoningWithoutReplyText([])).toBe(false)
+  })
+
+  it('returns false when there is no reasoning at all', () => {
+    expect(hasReasoningWithoutReplyText([text('启保停程序如下')])).toBe(false)
+  })
+
+  it('returns false when reasoning text is empty or whitespace-only', () => {
+    expect(hasReasoningWithoutReplyText([reasoning('')])).toBe(false)
+    expect(hasReasoningWithoutReplyText([reasoning('   \n  ')])).toBe(false)
+  })
+
+  it('returns true when only non-empty reasoning exists', () => {
+    expect(hasReasoningWithoutReplyText([reasoning('用户要一个 FX3U 启保停，我应该给出梯形图…')])).toBe(true)
+  })
+
+  it('returns true when reasoning is followed by an empty text part', () => {
+    expect(hasReasoningWithoutReplyText([reasoning('思考内容'), text('')])).toBe(true)
+    expect(hasReasoningWithoutReplyText([reasoning('思考内容'), text('  ')])).toBe(true)
+  })
+
+  it('returns false when a non-empty text part exists', () => {
+    expect(hasReasoningWithoutReplyText([reasoning('思考内容'), text('正文')])).toBe(false)
+  })
+
+  it('returns false when a non-empty data-code part exists', () => {
+    expect(hasReasoningWithoutReplyText([reasoning('思考内容'), dataCode('LD X0')])).toBe(false)
+  })
+
+  it('ignores an empty data-code part', () => {
+    expect(hasReasoningWithoutReplyText([reasoning('思考内容'), dataCode('')])).toBe(true)
+  })
+
+  it('returns false when a tool part exists', () => {
+    expect(hasReasoningWithoutReplyText([reasoning('思考内容'), toolPart('tool-mcp__gx__gx_sim_start')])).toBe(false)
+    expect(hasReasoningWithoutReplyText([reasoning('思考内容'), toolPart('dynamic-tool')])).toBe(false)
+  })
+
+  it('returns false when a file part exists', () => {
+    expect(hasReasoningWithoutReplyText([reasoning('思考内容'), filePart])).toBe(false)
+  })
+
+  it('ignores unrelated part types like step-start', () => {
+    const stepStart = { type: 'step-start' } as unknown as CherryMessagePart
+    expect(hasReasoningWithoutReplyText([stepStart, reasoning('思考内容')])).toBe(true)
+  })
+
+  it('returns true when text parts are all empty among multiple reasoning parts', () => {
+    expect(hasReasoningWithoutReplyText([reasoning('第一段'), reasoning(''), text(''), reasoning('第二段')])).toBe(true)
   })
 })
