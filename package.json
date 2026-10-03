@@ -23,7 +23,7 @@
     "build:check": "pnpm lint && pnpm docs:check-links && pnpm test",
     "build:unpack": "dotenv pnpm run build && electron-builder --dir",
     "build:win": "dotenv pnpm run build && electron-builder --win --x64 --arm64",
-    "build:win:x64": "dotenv pnpm run build && electron-builder --win --x64",
+    "build:win:x64": "dotenv pnpm run build && pnpm rebuild:electron && electron-builder --win --x64",
     "build:win:arm64": "dotenv pnpm run build && electron-builder --win --arm64",
     "build:mac": "dotenv pnpm run build && electron-builder --mac --arm64 --x64",
     "build:mac:arm64": "dotenv pnpm run build && electron-builder --mac --arm64",
