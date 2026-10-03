@@ -1,8 +1,8 @@
 {
   "name": "ckplcstudio",
-  "version": "2.0.0-rc.4",
+  "version": "2.0.0-rc.5",
   "private": true,
-  "description": "AI-powered TIA Portal PLC programming studio",
+  "description": "AI-powered PLC programming studio (Siemens TIA Portal & Mitsubishi GX Works)",
   "desktopName": "CKPLCStudio.desktop",
   "main": "./out/main/main.js",
   "author": "CK",
